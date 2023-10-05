@@ -36,10 +36,10 @@ def get_args():
         help=textwrap.dedent(help_menu['add_transactions'])
 
     )
-    # cli.add_argument(
-    #     '--reconcile', '-r',
-    #     action='store_true'
-    # )
+    cli.add_argument(
+        '--reconcile', '-r',
+        action='store_true'
+    )
     # cli.add_argument(
     #     '--forecast', '-f',
     #     action='store_true'
@@ -54,7 +54,7 @@ def main():
         controller = Controller(args)
         controller.start_process()
 
-    except (WrongFileExtension, FileNotFoundError, TransactionsTableDoesNotExist) as e:
+    except (WrongFileExtension, FileNotFoundError) as e:
         print(f"Error: {e}")
 
     finally:

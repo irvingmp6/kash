@@ -22,7 +22,7 @@ def db_connection(path):
             CREATE TABLE
                 bank_transactions(ID INTEGER PRIMARY KEY, Account_Alias, Transaction_ID, Details, 
                     Posting_Date, Description,  Amount, 
-                    Type, Balance, Check_or_Slip_num,
+                    Type, Balance, Check_or_Slip_num, Reconciled,
                     Timestamp DATETIME DEFAULT CURRENT_TIMESTAMP);
         """
         conn.execute(query)
@@ -30,7 +30,7 @@ def db_connection(path):
     def create_reconcilables_table(conn):
         query = """
             CREATE TABLE
-                reconcilables(Reconcilable_ID TEXT PRIMARY KEY, Expense_Alias, Bank_Transaction_Description_Pattern, 
+                reconcilables(Reconcilable_ID TEXT PRIMARY KEY, Name, Bank_Transaction_Description_Pattern, 
                               Extra_Condition, Recurrence, Amount, Type, Sub_Type, Upcoming_Date, Active 
                               GUID, Timestamp DATETIME DEFAULT CURRENT_TIMESTAMP);
         """
@@ -39,7 +39,7 @@ def db_connection(path):
     def create_reconciled_archive_table(conn):
         query = """
             CREATE TABLE 
-                reconciled(ID INTEGER PRIMARY KEY, Reconcilable_ID, Expense_Alias, Bank_Transaction_Description_Pattern, Extra_Condition, 
+                reconciled(ID INTEGER PRIMARY KEY, Reconcilable_ID, Name, Bank_Transaction_Description_Pattern, Extra_Condition, 
                           Recurrence, Amount, Type, Sub_Type, Upcoming_Date, Active
                           GUID, Date_Reconciled, bank_transactions_Transaction_ID, 
                           Timestamp DATETIME DEFAULT CURRENT_TIMESTAMP);
@@ -50,8 +50,9 @@ def db_connection(path):
         query = """
             SELECT 
                     Account_Alias, Transaction_ID, Details, 
-                    Posting_Date, Description, Amount, 
-                    Type, Balance, Check_or_Slip_num, Timestamp
+                    Posting_Date, Description, Amount, Type, 
+                    Balance, Check_or_Slip_num, Reconciled, 
+                    Timestamp
             FROM
                     bank_transactions;
         """
@@ -60,7 +61,7 @@ def db_connection(path):
     def check_reconcilable_table_exists(conn):
         query = """
             SELECT 
-                    Reconcilable_ID, Expense_Alias, Bank_Transaction_Description_Pattern, 
+                    Reconcilable_ID, Name, Bank_Transaction_Description_Pattern, 
                     Extra_Condition, Recurrence, Amount, Type, Sub_Type, 
                     Upcoming_Date, Timestamp, Active
             FROM
@@ -71,7 +72,7 @@ def db_connection(path):
     def check_reconciled_archive_table_exists(conn):
         query = """
             SELECT 
-                    ID, Reconcilable_ID, Expense_Alias, Bank_Transaction_Description_Pattern, 
+                    ID, Reconcilable_ID, Name, Bank_Transaction_Description_Pattern, 
                     Extra_Condition, Recurrence, Amount, Type, Sub_Type, 
                     Upcoming_Date, Timestamp, bank_transactions_Transaction_ID
             FROM
@@ -109,53 +110,53 @@ def db_connection(path):
 
     return con
 
-def get_day_from_date(date_str, date_format):
-    date = datetime.strptime(date_str, date_format)
+def get_day_from_date(date_str):
+    date = datetime.strptime(date_str, "%Y-%m-%d")
     return int(date.strftime("%d"))
 
-def is_capital_one_liz(amount, date_str, date_format):
+def is_capital_one_liz(amount, date_str):
     """"Condition":Amount has to be <=-60 and >=-80 AND 
     day of date has to be between 4 and 7 including ends
     """
-    day = get_day_from_date(date_str, date_format)
-    if amount >= -80 and amount >= -60 and day >= 4 and day <= 7:
+    day = get_day_from_date(date_str)
+    if amount >= -80 and amount <= -60 and day >= 4 and day <= 7:
         return True
     return False
 
-def is_capital_one_irving(amount, date_str, date_format):
+def is_capital_one_irving(amount, date_str):
     """""Condition: Amount has to be <=-70 and >=-105 AND 
     day of date has to be between 4 and 11 including ends
     """
-    day = get_day_from_date(date_str, date_format)
-    if amount >= -105 and amount >= -70 and day >= 4 and day <= 11:
+    day = get_day_from_date(date_str)
+    if amount >= -105 and amount <= -70 and day >= 4 and day <= 11:
         return True
     return False
 
-def is_capital_one_quicksilver(amount, date_str, date_format):
+def is_capital_one_quicksilver(amount, date_str):
     """""Condition: both is_capital_one_A() and is_capital_one_B() return False
     """
-    return not is_capital_one_irving(amount, date_str, date_format) and \
-        not is_capital_one_liz(amount, date_str, date_format)
+    return not is_capital_one_irving(amount, date_str) and \
+        not is_capital_one_liz(amount, date_str)
 
-def is_chase_amazon(amount, date_str, date_format):
+def is_chase_amazon(amount, date_str):
     """Condition: day is greater than 10"""
-    return get_day_from_date(date_str, date_format) > 10
+    return get_day_from_date(date_str) > 10
 
-def is_chase_irving(amount, date_str, date_format):
+def is_chase_irving(amount, date_str):
     """Condition: is_chase_amazon returns False and amount > 60"""
-    return not is_chase_amazon(amount, date_str, date_format) and amount > 60
+    return not is_chase_amazon(amount, date_str) and amount > 60
 
-def is_chase_liz(amount, date_str, date_format):
+def is_chase_liz(amount, date_str):
     """Condition: is_chase_irving returns False"""
-    return not is_chase_irving(amount, date_str, date_format)
+    return not is_chase_irving(amount, date_str)
 
-def is_conns_A(amount, date_str, date_format):
+def is_conns_A(amount, date_str):
     """Condition: day is less than 12"""
-    return get_day_from_date(date_str, date_format) < 12
+    return get_day_from_date(date_str) < 12
 
-def is_conns_B(amount, date_str, date_format):
+def is_conns_B(amount, date_str):
     """Condition: is_conns_A returns False"""
-    return not is_conns_A(amount, date_str, date_format)
+    return not is_conns_A(amount, date_str)
 
 class WrongFileExtension(Exception):
     """"Custom exception"""
