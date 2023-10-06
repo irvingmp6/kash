@@ -31,17 +31,17 @@ def db_connection(path):
         query = """
             CREATE TABLE
                 reconcilables(Reconcilable_ID TEXT PRIMARY KEY, Name, Bank_Transaction_Description_Pattern, 
-                              Extra_Condition, Recurrence, Amount, Type, Sub_Type, Upcoming_Date, Active 
-                              GUID, Timestamp DATETIME DEFAULT CURRENT_TIMESTAMP);
+                              Extra_Condition, Recurrence, Amount, Type, Sub_Type, Upcoming_Date, Active,
+                              Timestamp DATETIME DEFAULT CURRENT_TIMESTAMP);
         """
         conn.execute(query)
 
-    def create_reconciled_archive_table(conn):
+    def create_archive_table(conn):
         query = """
             CREATE TABLE 
-                reconciled(ID INTEGER PRIMARY KEY, Reconcilable_ID, Name, Bank_Transaction_Description_Pattern, Extra_Condition, 
-                          Recurrence, Amount, Type, Sub_Type, Upcoming_Date, Active
-                          GUID, Date_Reconciled, bank_transactions_Transaction_ID, 
+                archive(ID INTEGER PRIMARY KEY, Reconcilable_ID, Name, Bank_Transaction_Description_Pattern, 
+                          Extra_Condition, Recurrence, Amount, Type, Sub_Type, Upcoming_Date, 
+                          Date_Reconciled, bank_transactions_Transaction_ID, 
                           Timestamp DATETIME DEFAULT CURRENT_TIMESTAMP);
         """
         conn.execute(query)
@@ -69,14 +69,14 @@ def db_connection(path):
         """
         conn.execute(query)
 
-    def check_reconciled_archive_table_exists(conn):
+    def check_archive_table_exists(conn):
         query = """
             SELECT 
                     ID, Reconcilable_ID, Name, Bank_Transaction_Description_Pattern, 
                     Extra_Condition, Recurrence, Amount, Type, Sub_Type, 
                     Upcoming_Date, Timestamp, bank_transactions_Transaction_ID
             FROM
-                    reconciled;
+                    archive;
         """
         conn.execute(query)
 
@@ -96,14 +96,14 @@ def db_connection(path):
     if new_db:
         create_bank_transactions_table(con)
         create_reconcilables_table(con)
-        create_reconciled_archive_table(con)
+        create_archive_table(con)
         print(f"Created new DB:\n{filepath}")
 
     else:
         try:
             check_transactions_table_exists(con)
             check_reconcilable_table_exists(con)
-            check_reconciled_archive_table_exists(con)
+            check_archive_table_exists(con)
             print(f"Connected to existing DB:\n{filepath}")
         except sqlite3.OperationalError as e:
             raise TransactionsTableDoesNotExist(e)

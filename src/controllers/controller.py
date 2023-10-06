@@ -25,11 +25,28 @@ SET active = 'Y'
 WHERE reconcilable_id in {};
 """
 select_reconcilable_id_from_reconcilables_tabe = """SELECT reconcilable_id FROM reconcilables;"""
-select_active_reconcilables = """SELECT Name, Bank_Transaction_Description_Pattern, Extra_Condition, Amount, Upcoming_Date, Recurrence FROM reconcilables WHERE active = 'Y';"""
-select_transactions_from_month_to_date = """SELECT * FROM bank_transactions WHERE posting_date >= "{}";"""
+select_active_reconcilables = """SELECT 
+Name, Bank_Transaction_Description_Pattern, Extra_Condition, Amount, Upcoming_Date, Recurrence, reconcilable_id, type, sub_type, upcoming_date 
+FROM reconcilables WHERE active = 'Y';"""
+
+select_transactions_from_month_to_date = """SELECT * FROM bank_transactions WHERE reconciled != 'Y' and posting_date >= "{}";"""
 insert_into_reconcilables_table = """
     INSERT INTO reconcilables (reconcilable_id, Name, Bank_Transaction_Description_Pattern, Extra_Condition, Recurrence, Amount, Type, Sub_Type, Upcoming_Date, Active)
     VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
+"""
+insert_into_archive_table = """
+    INSERT INTO archive(Reconcilable_ID, Name, Bank_Transaction_Description_Pattern, Extra_Condition, Recurrence, Amount, Type, Sub_Type, Upcoming_Date, bank_transactions_Transaction_ID)
+    VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
+"""
+update_reconcilable_date = """
+    UPDATE reconcilables
+    SET upcoming_date = '{}'
+    WHERE reconcilable_id == '{}';
+"""
+update_reconciled_flag_in_bank_transactions_tables = """
+    UPDATE bank_transactions
+    SET reconciled = 'Y'
+    WHERE transaction_id == '{}';
 """
 
 def format_date(date_str, raw_format, new_format):
@@ -40,15 +57,16 @@ def get_month_start_from_date(date_str, date_format):
     date_obj = datetime.strptime(date_str, date_format)
     return date_obj.strftime("%Y-%m-01")
 
-def calculate_end_date(date_str, recurrence):
-    dela = relativedelta(months=1)
+def calculate_new_upcoming_date(date_str, recurrence):
+    delta = relativedelta(months=1)
     if recurrence == "B":
         delta = relativedelta(days=14)
     elif recurrence == "A":
         delta = relativedelta(years=1)
     date_obj = datetime.strptime(date_str, "%Y-%m-%d")
-    new_date_obj = date_obj + delta
+    new_date_obj = date_obj + delta - relativedelta(days=3)
     return new_date_obj.strftime("%Y-%m-%d")
+
 
 class Controller:
     def __init__(self, args):
@@ -210,25 +228,27 @@ class Controller:
         cursor = self.conn.execute(select_active_reconcilables)
         return [{"Name": record[0], "Bank Transaction Description Pattern": record[1],
                  "Extra Condition": record[2], "Amount": record[3], "Upcoming Date": record[4],
-                 "Recurrence": record[5]} 
+                 "Recurrence": record[5], "Reconcilable ID": record[6], "Type": record[7], 
+                 "Sub Type": record[8], "Upcoming Date": record[9]} 
             for record in cursor.fetchall()]
-    
+
     def reconcile_item(self, reconcilable):
-        print(f"Reconciling {reconcilable['Name']}")
+        related_bank_transactions = self.find_related_bank_transactions(reconcilable)
+        self.archive_related_bank_transactions(reconcilable, related_bank_transactions)
+        self.update_reconcileables_table(reconcilable, related_bank_transactions)
+        self.update_bank_transactions_table(related_bank_transactions)
+
+    def find_related_bank_transactions(self, reconcilable):
         extra_conditions = reconcilable["Extra Condition"]
         has_extra_conditions = extra_conditions.strip() != ""
         month_start = get_month_start_from_date(reconcilable["Upcoming Date"], "%Y-%m-%d")
         regex_pattern = rf"{reconcilable['Bank Transaction Description Pattern']}"
         df = pd.read_sql_query(\
             select_transactions_from_month_to_date.format(month_start), self.conn)
-        reconciled_records_df = df[df["Description"].str.match(regex_pattern)]
+        related_bank_transactions = df[df["Description"].str.match(regex_pattern)]
         if has_extra_conditions:
-            reconciled_records_df = self.create_df_with_single_row_if_meets_conditions(reconciled_records_df, extra_conditions)
-        # Set Reconciled Flag to "Y"
-        print(reconciled_records_df)
-        reconciled_records_df.loc[reconciled_records_df['Reconciled'] == 'N', ['Reconciled']] = 'Y'
-        print(reconciled_records_df)
-
+            related_bank_transactions = self.create_df_with_single_row_if_meets_conditions(related_bank_transactions, extra_conditions)
+        return related_bank_transactions
 
     def create_df_with_single_row_if_meets_conditions(self, df, extra_conditions):
         meets_conditions = getattr(interface_funcs, extra_conditions)
@@ -239,3 +259,38 @@ class Controller:
             if meets_conditions(amount, posting_date):
                 return df[df["Transaction_ID"].str.match(transaction_id)]
         return df.iloc[0:0]
+
+    def archive_related_bank_transactions(self, reconcilable, related_bank_transactions):
+        for _, row in related_bank_transactions.iterrows():
+            reconcilable_id = reconcilable["Reconcilable ID"]
+            name = reconcilable["Name"]
+            bank_transaction_description_pattern = \
+                reconcilable["Bank Transaction Description Pattern"]
+            extra_condition = reconcilable["Extra Condition"]
+            recurrence = reconcilable["Recurrence"]
+            amount = reconcilable["Amount"]
+            type_ = reconcilable["Type"]
+            sub_type = reconcilable["Sub Type"]
+            upcoming_date = reconcilable["Upcoming Date"]
+            bank_transactions_transaction_id = row[2]
+            values = (reconcilable_id, name, bank_transaction_description_pattern, 
+                      extra_condition, recurrence, amount, type_, sub_type, 
+                      upcoming_date, bank_transactions_transaction_id)
+            # self.conn.execute(insert_into_archive_table, values)
+            # self.conn.commit()
+
+    def update_reconcileables_table(self, reconcilable, related_bank_transactions):
+        reconcilable_id = reconcilable["Reconcilable ID"]
+        last_posted_date = related_bank_transactions["Posting_Date"].max()
+        new_upcoming_date = reconcilable["Upcoming Date"]
+        if isinstance(last_posted_date, str):
+            new_upcoming_date = calculate_new_upcoming_date(last_posted_date, reconcilable["Recurrence"])
+        print(f'{reconcilable["Name"]} || last posted: {last_posted_date} || expected Date: {reconcilable["Upcoming Date"]} || recurrence: {reconcilable["Recurrence"]} || new Date: {new_upcoming_date}')
+        # self.conn.execute(update_reconcilable_date.format(new_upcoming_date, reconcilable_id))
+        # self.conn.commit()
+    
+    def update_bank_transactions_table(self, related_bank_transactions):
+        for _, row in related_bank_transactions.iterrows():
+            transaction_id = f"{row[2]}"
+            # self.conn.execute(update_reconciled_flag_in_bank_transactions_tables.format(transaction_id))
+            # self.conn.commit()
