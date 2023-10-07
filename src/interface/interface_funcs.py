@@ -128,6 +128,8 @@ def is_capital_one_irving(amount, date_str):
     day of date has to be between 4 and 11 including ends
     """
     day = get_day_from_date(date_str)
+    if is_capital_one_liz(amount, date_str):
+        return False
     if amount >= -105 and amount <= -70 and day >= 4 and day <= 11:
         return True
     return False
@@ -143,20 +145,24 @@ def is_chase_amazon(amount, date_str):
     return get_day_from_date(date_str) > 10
 
 def is_chase_irving(amount, date_str):
-    """Condition: is_chase_amazon returns False and amount > 60"""
-    return not is_chase_amazon(amount, date_str) and amount > 60
+    """Condition: is_chase_amazon returns False and amount > -60"""
+    if is_chase_amazon(amount, date_str):
+        return False
+    return amount > -60
 
 def is_chase_liz(amount, date_str):
     """Condition: is_chase_irving returns False"""
+    if is_chase_amazon(amount, date_str):
+        return False
     return not is_chase_irving(amount, date_str)
 
-def is_conns_A(amount, date_str):
+def is_conns_B(amount, date_str):
     """Condition: day is less than 12"""
     return get_day_from_date(date_str) < 12
 
-def is_conns_B(amount, date_str):
+def is_conns_A(amount, date_str):
     """Condition: is_conns_A returns False"""
-    return not is_conns_A(amount, date_str)
+    return not is_conns_B(amount, date_str)
 
 class WrongFileExtension(Exception):
     """"Custom exception"""

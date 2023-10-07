@@ -31,19 +31,26 @@ def get_args():
         help=textwrap.dedent(help_menu['add_transactions'])
         )
     cli.add_argument(
-        '--update-financials',
+        '--commit', '-c',
+        action='store_true',
+        default=False,
+        help=textwrap.dedent(help_menu['commit'])
+    )
+    cli.add_argument(
+        '--reconcile', '-r',
+        action='store_true',
+        help=textwrap.dedent(help_menu['reconcile'])
+    )
+    cli.add_argument(
+        '--update-financials', '-u',
         action='store_true',
         help=textwrap.dedent(help_menu['add_transactions'])
 
     )
     cli.add_argument(
-        '--reconcile', '-r',
+        '--forecast', '-f',
         action='store_true'
     )
-    # cli.add_argument(
-    #     '--forecast', '-f',
-    #     action='store_true'
-    # )
     return cli.parse_args()
 
 def main():

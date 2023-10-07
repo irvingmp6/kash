@@ -5,3 +5,5 @@ class UserSettings:
         self.new_transactions_csv_list = args.add_transactions
         self.update_financials = self.args.update_financials
         self.reconcile = self.args.reconcile
+        self.commit = self.args.commit
+        self.forecast = self.args.forecast
