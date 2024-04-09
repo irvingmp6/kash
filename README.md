@@ -24,7 +24,7 @@ For now, I'm using SQLLiteStudio to query my transactions. When I get more time,
 
 # Usage
 ```
-git clone https://github.com/irvingmp6/kash.git
-pip install -e ./kash
-kash --help
+$ git clone https://github.com/irvingmp6/kash.git
+$ pip install -e ./kash
+$ kash --help
 ```
