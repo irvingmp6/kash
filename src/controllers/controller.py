@@ -1,10 +1,6 @@
 import hashlib
-import pathlib
 import pandas as pd
 from datetime import datetime
-from dateutil.relativedelta import relativedelta
-
-from src.interface import interface_funcs
 
 from .user_settings import UserSettings
 
@@ -14,64 +10,10 @@ insert_into_bank_transactions_table = """
     INSERT INTO bank_transactions (Account_Alias, Transaction_ID, Details, Posting_Date, Description, Amount, Type, Balance, Check_or_Slip_num, Reconciled)
     VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
 """
-deactivate_active_records_in_reconcilables_table = """
-UPDATE reconcilables
-SET active = 'N'
-WHERE active = 'Y';
-"""
-activate_records_in_reconcilables_table = """
-UPDATE reconcilables
-SET active = 'Y'
-WHERE reconcilable_id in {};
-"""
-select_reconcilable_id_from_reconcilables_tabe = """SELECT reconcilable_id FROM reconcilables;"""
-select_active_reconcilables = """SELECT 
-Name, Bank_Transaction_Description_Pattern, Extra_Condition, Amount, Upcoming_Date, Recurrence, reconcilable_id, type, sub_type, upcoming_date 
-FROM reconcilables WHERE active = 'Y';"""
-
-select_active_reconcilables_sorted = """
-SELECT Name, Amount, Upcoming_Date, Recurrence
-FROM reconcilables WHERE active = 'Y' ORDER BY upcoming_date ASC;"""
-
-select_transactions_using_buffered_date = """SELECT * FROM bank_transactions WHERE reconciled != 'Y' and posting_date >= "{}";"""
-insert_into_reconcilables_table = """
-    INSERT INTO reconcilables (reconcilable_id, Name, Bank_Transaction_Description_Pattern, Extra_Condition, Recurrence, Amount, Type, Sub_Type, Upcoming_Date, Active)
-    VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
-"""
-insert_into_archive_table = """
-    INSERT INTO archive(Reconcilable_ID, Name, Bank_Transaction_Description_Pattern, Extra_Condition, Recurrence, Amount, Type, Sub_Type, Upcoming_Date, bank_transactions_Transaction_ID)
-    VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
-"""
-update_reconcilable_date = """
-    UPDATE reconcilables
-    SET upcoming_date = '{}'
-    WHERE reconcilable_id == '{}';
-"""
-update_reconciled_flag_in_bank_transactions_tables = """
-    UPDATE bank_transactions
-    SET reconciled = 'Y'
-    WHERE transaction_id == '{}';
-"""
-select_reconcilables_for_csv = """
-    SELECT Name, Bank_Transaction_Description_Pattern, Extra_Condition, Recurrence, Amount, Type, Sub_Type, Upcoming Date
-    FROM reconcilables
-    WHERE active = 'Y';
-"""
 
 def format_date(date_str, raw_format, new_format):
     date_obj = datetime.strptime(date_str, raw_format)
     return date_obj.strftime(new_format)
-
-def calculate_next_upcoming_date(date_str, recurrence):
-    delta = relativedelta(months=1)
-    if recurrence == "B":
-        delta = relativedelta(days=14)
-    elif recurrence == "A":
-        delta = relativedelta(years=1)
-    date_obj = datetime.strptime(date_str, "%Y-%m-%d")
-    new_date_obj = date_obj + delta
-    return new_date_obj.strftime("%Y-%m-%d")
-
 
 class Controller:
     def __init__(self, args):
@@ -79,25 +21,11 @@ class Controller:
         self.conn = self.user_settings.conn
         self.new_transactions_csv_list = \
             self.user_settings.new_transactions_csv_list
-        self.update_financials = self.user_settings.update_financials
-        self.reconcile = self.user_settings.reconcile
         self.commit = self.user_settings.commit
-        self.forecast = self.user_settings.forecast
-        self.latest_reconcilables_df = None
-        self.starting_balances = {}
-        self.months = 1
 
     def start_process(self):
         if self.new_transactions_csv_list:
             self.ingest_new_transactions_csv()
-        if self.update_financials:
-            self.update_reconcileable_table()
-        if self.reconcile:
-            self.start_reconcililation()
-            self.show_latest_reconcilables()
-        if self.forecast:
-            self.update_starting_balances()
-            self.predict_daily_balances()
 
     def ingest_new_transactions_csv(self):
         for csv_file in self.new_transactions_csv_list:
@@ -160,237 +88,4 @@ class Controller:
         print(f"[+] Adding {len(df.index)} new transactions:")
         print(df["Transaction ID"])
         if self.commit:
-            self.conn.commit() 
-   
-    def update_reconcileable_table(self):
-        self.deactivate_current_active_records()
-        incoming_reconcilables_df = self.create_incoming_reconcilable_df()
-
-        # Create new DF containing only new reconcilables
-        cursor = self.conn.execute(select_reconcilable_id_from_reconcilables_tabe).fetchall()
-        reconcilable_ids_from_db = [record[0] for record in cursor]
-        new_reconcilables_df = \
-            incoming_reconcilables_df[~incoming_reconcilables_df["Reconcilable ID"].isin(\
-                reconcilable_ids_from_db)]        
-        self.insert_df_into_reconcilables_table(new_reconcilables_df)
-        self.activate_incoming_reconcilables_records(incoming_reconcilables_df)
-    
-    def deactivate_current_active_records(self):
-        if self.commit:
-            self.conn.execute(deactivate_active_records_in_reconcilables_table)
             self.conn.commit()
-
-    def create_incoming_reconcilable_df(self):
-        csv_file = pathlib.Path(__file__).parent.parent.joinpath("config").joinpath("reconcileables.csv")
-        converters = {"Extra Condition": str}
-        incoming_reconcilables_df = \
-            pd.read_csv(csv_file, delimiter=",", header=0, converters=converters)
-        reconcilable_ids = []
-        for _, row in incoming_reconcilables_df.iterrows():
-            name = row["Name"]
-            pattern = row["Bank Transaction Description Pattern"]
-            extra_description = row["Extra Condition"]
-            recurrence = row["Recurrence"]
-            amount = str(row["Amount"])
-            type_ = row["Type"]
-            sub_type = row["Sub Type"]
-            upcoming_date = row["Upcoming Date"]
-            hashable = "".join([name, pattern, extra_description, recurrence, amount, 
-                                type_, sub_type, upcoming_date])
-            reconcilable_id = hashlib.sha256(hashable.encode()).hexdigest()
-            reconcilable_ids.append(reconcilable_id)
-        incoming_reconcilables_df.insert(0, "Reconcilable ID", reconcilable_ids, True)
-        return incoming_reconcilables_df
-
-    def insert_df_into_reconcilables_table(self, df):
-        df = df.reset_index()
-        for _, row in df.iterrows():
-            reconcilable_id = row["Reconcilable ID"]
-            name = row["Name"]
-            pattern = row["Bank Transaction Description Pattern"]
-            extra_description = row["Extra Condition"]
-            recurrence = row["Recurrence"]
-            amount = row["Amount"]
-            type_ = row["Type"]
-            sub_type = row["Sub Type"]
-            upcoming_date = row["Upcoming Date"]
-            formatted_upcoming_date = format_date(upcoming_date, "%m/%d/%Y", "%Y-%m-%d")
-            active = 'N'
-            values = (reconcilable_id, name, pattern, extra_description, recurrence, amount,\
-                       type_, sub_type, formatted_upcoming_date, active)
-            if self.commit:
-                self.conn.execute(insert_into_reconcilables_table, values)
-        print(f"[+] Adding {len(df.index)} new reconcilables:")
-        print(df["Reconcilable ID"])
-        if self.commit:
-            self.conn.commit()
-    
-    def activate_incoming_reconcilables_records(self, df):
-        reconcilable_ids = str(tuple([id_ for id_ in df["Reconcilable ID"]]))
-        if self.commit:
-            self.conn.execute(\
-                activate_records_in_reconcilables_table.format(reconcilable_ids))
-            self.conn.commit()
-
-    def start_reconcililation(self):
-        reconcilables = self.create_reconcilables_list()
-        for reconcilable in reconcilables:
-            self.reconcile_item(reconcilable)
-    
-    def create_reconcilables_list(self):
-        cursor = self.conn.execute(select_active_reconcilables)
-        return [{"Name": record[0], "Bank Transaction Description Pattern": record[1],
-                 "Extra Condition": record[2], "Amount": record[3], "Upcoming Date": record[4],
-                 "Recurrence": record[5], "Reconcilable ID": record[6], "Type": record[7], 
-                 "Sub Type": record[8], "Upcoming Date": record[9]} 
-            for record in cursor.fetchall()]
-
-    def reconcile_item(self, reconcilable):
-        if reconcilable["Name"] == 'Credit Card (Chase Amazon)':
-            print()
-        related_bank_transactions = self.find_related_bank_transactions(reconcilable)
-        if not related_bank_transactions.empty:
-            self.archive_related_bank_transactions(reconcilable, related_bank_transactions)
-            self.update_reconcilables_table(reconcilable, related_bank_transactions)
-            self.update_bank_transactions_table(related_bank_transactions)
-        else:
-            print(f"[!] Nothing to reconcile: {reconcilable['Name']}")
-
-    def find_related_bank_transactions(self, reconcilable):
-        if reconcilable["Name"] == 'Credit Card (Chase Amazon)':
-            print()
-        extra_conditions = reconcilable["Extra Condition"]
-        has_extra_conditions = extra_conditions.strip() != ""
-        regex_pattern = rf"{reconcilable['Bank Transaction Description Pattern']}"
-        df = pd.read_sql_query(\
-            select_transactions_using_buffered_date.format(reconcilable["Upcoming Date"]), self.conn)
-        related_bank_transactions = df[df["Description"].str.match(regex_pattern)]
-        if has_extra_conditions:
-            related_bank_transactions = self.create_df_if_meets_conditions(related_bank_transactions, extra_conditions)
-        return related_bank_transactions
-
-    def create_df_if_meets_conditions(self, df, extra_conditions):
-        frames = []
-        meets_conditions = getattr(interface_funcs, extra_conditions)
-        for _, row in df.iterrows():
-            transaction_id = row["Transaction_ID"]
-            amount = row["Amount"]
-            posting_date = row["Posting_Date"]
-            if meets_conditions(amount, posting_date):
-                frames.append(df[df["Transaction_ID"].str.match(transaction_id)])
-        if len(frames):
-            return pd.concat(frames)
-        return df.iloc[0:0]
-
-    def archive_related_bank_transactions(self, reconcilable, related_bank_transactions):
-        for _, row in related_bank_transactions.iterrows():
-            reconcilable_id = reconcilable["Reconcilable ID"]
-            name = reconcilable["Name"]
-            bank_transaction_description_pattern = \
-                reconcilable["Bank Transaction Description Pattern"]
-            extra_condition = reconcilable["Extra Condition"]
-            recurrence = reconcilable["Recurrence"]
-            amount = reconcilable["Amount"]
-            type_ = reconcilable["Type"]
-            sub_type = reconcilable["Sub Type"]
-            upcoming_date = reconcilable["Upcoming Date"]
-            bank_transactions_transaction_id = row[2]
-            values = (reconcilable_id, name, bank_transaction_description_pattern, 
-                      extra_condition, recurrence, amount, type_, sub_type, 
-                      upcoming_date, bank_transactions_transaction_id)
-            print(f"Archiving Transaction ID:\t{bank_transactions_transaction_id}")
-            if self.commit:
-                self.conn.execute(insert_into_archive_table, values)
-                self.conn.commit()
-
-    def update_reconcilables_table(self, reconcilable, related_bank_transactions):
-        reconcilable_id = reconcilable["Reconcilable ID"]
-        next_upcoming_date = reconcilable["Upcoming Date"]
-        for _, row in related_bank_transactions.iterrows():
-            next_upcoming_date = calculate_next_upcoming_date(next_upcoming_date, reconcilable["Recurrence"])
-        print(f'{reconcilable["Name"]} || expected Date: {reconcilable["Upcoming Date"]} || recurrence: {reconcilable["Recurrence"]} || new Date: {next_upcoming_date}')
-        print(f"Updating reconcilable:\t{reconcilable_id}")
-        if self.commit:
-            self.conn.execute(update_reconcilable_date.format(next_upcoming_date, reconcilable_id))
-            self.conn.commit()
-            print(self.conn.execute(select_reconcilables_for_csv))
-            updated_reconcilables_df = pd.read_sql_query(select_reconcilables_for_csv, self.conn)
-            csv_file = pathlib.Path(__file__).parent.parent.joinpath("config").joinpath("reconcileables.csv")
-            print(csv_file)
-            updated_reconcilables_df.to_csv(csv_file)
-    
-    def update_bank_transactions_table(self, related_bank_transactions):
-        for _, row in related_bank_transactions.iterrows():
-            transaction_id = f"{row[2]}"
-            if self.commit:
-                self.conn.execute(update_reconciled_flag_in_bank_transactions_tables.format(transaction_id))
-                self.conn.commit()
-    
-    def show_latest_reconcilables(self):
-        df = pd.read_sql_query(select_active_reconcilables_sorted, self.conn)
-        self.latest_reconcilables_df = df
-        print(df.to_string())
-    
-    def update_starting_balances(self):
-        csv_file = pathlib.Path(__file__).parent.parent.joinpath("config").joinpath("account_balances.csv")
-        starting_balances_df = pd.read_csv(csv_file, header=0)
-        for _, row in starting_balances_df.iterrows():
-            name = row[0]
-            type_ = row[1]
-            balance = row[2]
-            group = row[3]
-            self.starting_balances[name] = {"Type": type_, "Balance": balance, "Group": group}
-
-    def predict_daily_balances(self):
-        amounts_grouped_by_date_df = self.create_amounts_grouped_by_date_df()
-        dates = self.create_list_of_dates()
-        forecast = {}
-        daily_balance = sum([value["Balance"] for key, value in self.starting_balances.items() if value["Group"] == "Forecast"])
-        for date in dates:
-            for series_date, amount in amounts_grouped_by_date_df.items():
-                if series_date == date:
-                    daily_balance += amount
-            print(date, daily_balance)
-
-    def create_amounts_grouped_by_date_df(self):
-        one_timers = self.latest_reconcilables_df[self.latest_reconcilables_df["Recurrence"].str.match("O")][["Upcoming_Date", "Amount"]]
-        annuals = self.latest_reconcilables_df[self.latest_reconcilables_df["Recurrence"].str.match("A")][["Upcoming_Date", "Amount"]]
-        monthlies = self.latest_reconcilables_df[self.latest_reconcilables_df["Recurrence"].str.match("M")][["Upcoming_Date", "Amount"]]
-        biweeklies = self.latest_reconcilables_df[self.latest_reconcilables_df["Recurrence"].str.match("B")][["Upcoming_Date", "Amount"]]
-        frames = [one_timers, annuals, monthlies, biweeklies, self.get_future_reconcilables("M"), self.get_future_reconcilables("B")]
-        future_dates = pd.concat(frames)
-        return future_dates.groupby('Upcoming_Date')['Amount'].sum()
-
-    def get_future_reconcilables(self, recurrence):
-        iterations = self.months
-        if recurrence == "B":
-            self.months = self.months * 2
-        print(self.months)
-        df = self.latest_reconcilables_df[self.latest_reconcilables_df["Recurrence"].str.match(recurrence)][["Upcoming_Date", "Amount"]]
-        rows = [(row[0], row[1]) for _, row in df.iterrows()]
-        temp_rows = rows
-        data = []
-        for i in range(self.months):
-            for temp_row in temp_rows:
-                date = temp_row[0]
-                amount = temp_row[1]
-                new_upcoming_date = calculate_next_upcoming_date(date, recurrence)
-                data.append((new_upcoming_date, amount))
-            temp_rows = data[i + len(temp_rows):]
-        return pd.DataFrame(data, columns=["Upcoming_Date", "Amount"])
-    
-    def create_list_of_dates(self):
-        count_of_days = 30*self.months
-        today = datetime.now()
-        dates = []
-        for days in range(count_of_days):
-            future_day = today + relativedelta(days=days)
-            dates.append(future_day.strftime("%Y-%m-%d"))
-        return dates
-
-
-
-
-
-
-

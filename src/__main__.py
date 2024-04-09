@@ -8,7 +8,6 @@ from src.interface.interface_text import get_help_menu
 from src.interface.interface_funcs import db_connection
 from src.interface.interface_funcs import pathlib_csv_path
 from src.interface.interface_funcs import WrongFileExtension
-from src.interface.interface_funcs import TransactionsTableDoesNotExist
 
 def get_args():
     help_menu = get_help_menu()
@@ -24,32 +23,17 @@ def get_args():
         help=textwrap.dedent(help_menu['sqlite_db'])
     )
     cli.add_argument(
-        '--add-transactions', '-a',
+        '--import_csv', '-i',
         nargs='+',
         default=None,
         type=pathlib_csv_path,
-        help=textwrap.dedent(help_menu['add_transactions'])
+        help=textwrap.dedent(help_menu['import_csv'])
         )
     cli.add_argument(
         '--commit', '-c',
         action='store_true',
         default=False,
         help=textwrap.dedent(help_menu['commit'])
-    )
-    cli.add_argument(
-        '--reconcile', '-r',
-        action='store_true',
-        help=textwrap.dedent(help_menu['reconcile'])
-    )
-    cli.add_argument(
-        '--update-financials', '-u',
-        action='store_true',
-        help=textwrap.dedent(help_menu['add_transactions'])
-
-    )
-    cli.add_argument(
-        '--forecast', '-f',
-        action='store_true'
     )
     return cli.parse_args()
 
@@ -67,8 +51,6 @@ def main():
     finally:
         if args:
             args.sqlite_db.close()
-
-
 
 if __name__ == "__main__":
     main()
