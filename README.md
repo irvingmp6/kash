@@ -21,3 +21,10 @@ I have future plans to add this kind of functionality into the app. (Side note, 
 I also have a wrapper python app that automatically (and securely) downloads the bank files which then calls Kash to make the inserts. That kind of automation is outside the scope of what Kash does, which is why I did not include that in Kash. I might create a separate repo to house that project. But for now, it's just sitting in my local machine.
 ## SQL
 For now, I'm using SQLLiteStudio to query my transactions. When I get more time, I'll add functionality to return records based through the terminal instead of using a different app.
+
+# Usage
+```
+git clone https://github.com/irvingmp6/kash.git
+pip install -e ./kash
+kash --help
+```
