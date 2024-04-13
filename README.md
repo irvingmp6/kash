@@ -18,7 +18,7 @@ $ git clone https://github.com/irvingmp6/kash.git
 $ pip install -e ./kash
 ```
 ## Test using sample data (Chase)
-# kash import
+### kash import
 Let's `import` transactions into the database using a sample chase CSV file. The following command will initialize the database and will show you the records that are ready to be imported.
 ```
 $ kash import test.db kash/test_files/sample_chase_bank_activity.csv --account-alias "Chase" 
@@ -33,7 +33,7 @@ $ kash import test.db kash/test_files/sample_chase_bank_activity.csv --account-a
 ```
 
 ## Test using sample data other than Chase
-## kash import-raw
+### kash import-raw
 Let's use sample files that are different from Chase. The following commands make use of `import-raw` which requires the path to a config file as another parameter.
 ```
 $ kash import-raw test.db kash/test_files/wells_fargo_config.ini kash/test_files/sample_wf_bank_activity.csv --account-alias "WF"
