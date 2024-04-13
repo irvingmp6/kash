@@ -52,7 +52,6 @@ coverage.xml
 cover/
 
 # Extra
-*.csv
 *.xlsx
 *.db
 
