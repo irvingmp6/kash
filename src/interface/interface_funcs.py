@@ -2,20 +2,6 @@ import sqlite3
 from pathlib import Path
 from datetime import datetime
 
-def pathlib_csv_path(path):
-    file = Path(path)
-    filepath = str(file.absolute()).replace("\\","/")
-
-    msg = (f"File was not found:\n{filepath}")
-    if not file.is_file():
-        raise FileNotFoundError(msg)
-
-    if file.suffix == "csv":
-        msg = (f"File extenstion is not csv:\n{filepath}")
-        raise WrongFileExtension(msg)
-
-    return file
-
 def db_connection(path):
     def create_bank_transactions_table(conn):
         query = """
@@ -77,3 +63,6 @@ class WrongFileExtension(Exception):
 
 class TransactionsTableDoesNotExist(Exception):
     """"Custom exception"""
+
+class ConfigSectionIncompleteError(Exception):
+    """Custom exception"""

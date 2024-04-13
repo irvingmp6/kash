@@ -1,7 +1,10 @@
 import hashlib
 import pandas as pd
 from datetime import datetime
+from distutils.util import strtobool
+from configparser import NoSectionError, NoOptionError
 
+from src.interface.interface_funcs import ConfigSectionIncompleteError
 from .user_settings import UserSettings
 
 select_transaction_ids_from_transactions_table = "SELECT transaction_id FROM bank_transactions;"
@@ -19,21 +22,43 @@ class Controller:
     def __init__(self, args):
         self.user_settings = UserSettings(args)
         self.conn = self.user_settings.conn
-        self.new_transactions_csv_list = \
-            self.user_settings.new_transactions_csv_list
+        self.new_csv_files = \
+            self.user_settings.new_csv_files
         self.commit = self.user_settings.commit
+        self.config = self.user_settings.config
+        self.chase_column_config_name_map = self.get_chase_column_config_name_map()
+        self.chase_column_names = self.get_chase_column_names()
+
+    def get_chase_column_config_name_map(self):
+        return {
+            "details" : "Details",
+            "posting_date" : "Posting Date",
+            "description" : "Description",
+            "amount" : "Amount",
+            "type" : "Type",
+            "balance" : "Balance",
+            "check_or_slip_number" : "Check or Slip #",
+            "extra_1" : "Extra 1"
+        }
+
+    def get_chase_column_names(self):
+        return [self.chase_column_config_name_map[k]
+                for k in self.chase_column_config_name_map.keys()]
 
     def start_process(self):
-        if self.new_transactions_csv_list:
-            self.ingest_new_transactions_csv()
+        self.ingest_new_transactions_csv()
 
     def ingest_new_transactions_csv(self):
-        for csv_file in self.new_transactions_csv_list:
+        for csv_file in self.new_csv_files:
             new_transactions_df = self.get_new_transactions_df(csv_file)
             self.insert_df_into_bank_transactions_table(new_transactions_df)
 
     def get_new_transactions_df(self, csv_file):
-        csv_trans_df = self.create_dataframe_from_chase_csv(csv_file)
+        if self.config:
+            csv_trans_df = self.create_dataframe_from_foreign_csv(csv_file, self.user_settings.account_alias)
+        else:
+            csv_trans_df = self.create_dataframe_from_chase_csv(csv_file, self.user_settings.account_alias)
+
         csv_trans_df = csv_trans_df[csv_trans_df['Balance'] != ' ']
         cursor = \
             self.conn.execute(select_transaction_ids_from_transactions_table).fetchall()
@@ -42,11 +67,54 @@ class Controller:
             csv_trans_df[~csv_trans_df["Transaction ID"].isin(\
                 transaction_ids_from_bank_transactions_table)]
 
-    def create_dataframe_from_chase_csv(self, csv_file, account_alias="Chase 9365"):
-        names = ["Details","Posting Date","Description","Amount","Type","Balance","Check or Slip #","Extra 1"]
+    def create_dataframe_from_foreign_csv(self, csv_file, account_alias):
+        try:
+            header = strtobool(self.config["HEADER"].get("has_header").strip())
+        except AttributeError as e:
+            message = (f"{e}.\nTroubleshooting help: Ensure the HEADER section contains the proper definitions"
+                       f" in the config file. Refer to the configs provided in src/test_files/ for help.")
+            raise ConfigSectionIncompleteError(message)
+        temp_df = pd.read_csv(csv_file, delimiter=",", header=None, skiprows=[0])
+        converters = {i: str for i in range(temp_df.shape[1])}
+        if header:
+            df = pd.read_csv(csv_file, delimiter=",", header=None, converters=converters, skiprows=[0])
+        else:
+            df = pd.read_csv(csv_file, delimiter=",", header=None, converters=converters)
+        df = self.convert_dataframe_to_chase_format(df)
+        return self.create_ingesitble_df(df, account_alias)
+
+    def convert_dataframe_to_chase_format(self, df):
+        # Create list of blank values the same size of the df
+        count_row = df.shape[0]
+        empty_values = ["" for _ in range(count_row)]
+
+        # Create Chase columns with blank values
+        for name in self.chase_column_names:
+            df.insert(df.shape[1], name, empty_values, True)
+
+        # Replace the Chase blank values using existing columns 
+        try:
+            for key in self.config["GENERAL"]:
+                value = self.config["GENERAL"][key].strip()
+                if value:
+                    index = int(value)
+                    df[self.chase_column_config_name_map[key]] = df[index]
+        except KeyError as e:
+            message = (f"{e}.\nTroubleshooting help: Ensure the GENERAL section contains the proper definitions"
+                       f" in the config file. Refer to the configs provided in src/test_files/ for help.")
+            raise ConfigSectionIncompleteError(message)
+
+        # Drop columns that you don't need
+        df = df.loc[:, df.columns.intersection(self.chase_column_names)]
+        return df
+
+    def create_dataframe_from_chase_csv(self, csv_file, account_alias):
         converters = {"Balance": str}
-        df = pd.read_csv(csv_file, delimiter=",", skiprows=[0], header=None, names=names, \
+        df = pd.read_csv(csv_file, delimiter=",", skiprows=[0], header=None, names=self.chase_column_names, \
                          converters=converters)
+        return self.create_ingesitble_df(df, account_alias)
+
+    def create_ingesitble_df(self, df, account_alias):
         transaction_ids = []
         account_aliases = []
         for _, row in df.iterrows():

@@ -6,8 +6,8 @@ from _version import __version__
 from src.controllers.controller import Controller
 from src.interface.interface_text import get_help_menu
 from src.interface.interface_funcs import db_connection
-from src.interface.interface_funcs import pathlib_csv_path
 from src.interface.interface_funcs import WrongFileExtension
+from src.interface.interface_funcs import ConfigSectionIncompleteError
 
 def get_args():
     help_menu = get_help_menu()
@@ -16,26 +16,89 @@ def get_args():
         formatter_class=argparse.RawDescriptionHelpFormatter,
         description=textwrap.dedent(help_menu['desc'])
     )
-    cli.add_argument(
+    subparsers = cli.add_subparsers(help=help_menu['subparsers'])
+
+    # Import Subparser
+    import_parser = subparsers.add_parser(
+        'import',
+        help=help_menu['import']['desc']
+    )
+    import_parser.add_argument(
         'sqlite_db',
         metavar='<SQLITE DB>',
         type=db_connection,
-        help=textwrap.dedent(help_menu['sqlite_db'])
+        help=textwrap.dedent(help_menu['import']['sqlite_db'])
     )
-    cli.add_argument(
-        '--import_csv', '-i',
+    import_parser.add_argument(
+        'new_csv_files',
+        metavar='<CSV FILES>',
         nargs='+',
         default=None,
-        type=pathlib_csv_path,
-        help=textwrap.dedent(help_menu['import_csv'])
+        help=textwrap.dedent(help_menu['import']['new_csv_files'])
         )
-    cli.add_argument(
+    import_parser.add_argument(
+        '--account-alias', '-a',
+        type=str,
+        default='',
+        help=textwrap.dedent(help_menu['import']['account_alias'])
+    )
+    import_parser.add_argument(
         '--commit', '-c',
         action='store_true',
         default=False,
-        help=textwrap.dedent(help_menu['commit'])
+        help=textwrap.dedent(help_menu['import']['commit'])
     )
+
+    # Import Raw Subparser
+    import_raw_parser = subparsers.add_parser(
+        'import-raw',
+        help=help_menu['import']['desc']
+    )
+    import_raw_parser.add_argument(
+        'sqlite_db',
+        metavar='<SQLITE DB>',
+        type=db_connection,
+        help=textwrap.dedent(help_menu['import']['sqlite_db'])
+    )
+    import_raw_parser.add_argument(
+        'config',
+        metavar='<CONFIG>',
+        help=textwrap.dedent(help_menu['import-raw']['config'])
+    )
+    import_raw_parser.add_argument(
+        'new_csv_files',
+        metavar='<CSV FILES>',
+        nargs='+',
+        default=None,
+        help=textwrap.dedent(help_menu['import']['new_csv_files'])
+        )
+    import_raw_parser.add_argument(
+        '--account-alias', '-a',
+        type=str,
+        default='',
+        help=textwrap.dedent(help_menu['import']['account_alias'])
+    )
+    import_raw_parser.add_argument(
+        '--commit', '-c',
+        action='store_true',
+        default=False,
+        help=textwrap.dedent(help_menu['import']['commit'])
+    )
+
+    # SQL Subparser
+    # sql_parser = subparsers.add_parser('sql')
+    # sql_parser.add_argument(
+    #     'config'
+    #     metavar='<CONFIG>',
+    #     type=pathlib_config_path,
+    # )
+    # sql_parser.add_argument(
+    #     'key'
+    #     metavar='<KEY>'
+    # )
+    # import pdb; pdb.set_trace()
     return cli.parse_args()
+
 
 def main():
     args = None
@@ -45,7 +108,7 @@ def main():
         controller = Controller(args)
         controller.start_process()
 
-    except (WrongFileExtension, FileNotFoundError) as e:
+    except (FileNotFoundError, ConfigSectionIncompleteError) as e:
         print(f"Error: {e}")
 
     finally:
