@@ -9,7 +9,7 @@ import pandas as pd
 from pandas.testing import assert_frame_equal
 
 from src.controllers.controller import Controller
-
+from src.controllers.controller import insert_into_bank_transactions_table
 
 class TestControllerHappyPathChaseCSV(TestCase):
     def setUp(self):
@@ -176,20 +176,30 @@ class TestControllerHappyPathChaseCSV(TestCase):
         expected_df = self.processed_df
         assert_frame_equal(result.sort_index(axis=1), expected_df.sort_index(axis=1))
     
-    # @patch('src.controllers.controller.print')
-    # def test__insert_df_into_bank_transactions_table_commit_is_False(self, print_mock):
     def test__insert_df_into_bank_transactions_table_commit_is_False(self):
         self_mock = MagicMock()
-        self_mock._commit = True
+        self_mock._commit = False
         self_mock._conn = MagicMock()
         df = self.processed_df
 
         Controller._insert_df_into_bank_transactions_table(self_mock, df)
 
-    # def test__insert_df_into_bank_transactions_table_commit_is_True(self):
-    #     self_mock = MagicMock()
-    #     self_mock._commit = True
-    #     self_mock._conn = MagicMock()
+        self_mock._print_summary.assert_called()
+        self_mock._conn.execute.assert_not_called()
+        self_mock._conn.commit.assert_not_called()
+
+    def test__insert_df_into_bank_transactions_table_commit_is_True(self):
+        self_mock = MagicMock()
+        self_mock._commit = True
+        self_mock._conn = MagicMock()
+        df = self.processed_df
+        query = """INSERT INTO bank_transactions (Account_Alias, Transaction_ID, Details, Posting_Date, Description, Amount, Type, Balance, Check_or_Slip_num, Reconciled),VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?);', ('Chase Bank', 'DEF234', 'DEBIT', '2024-02-01', 'SPAM BAR HAM', '-7.77', 'DEBIT_CARD', '6.66', '', 'N')"""
+
+        Controller._insert_df_into_bank_transactions_table(self_mock, df)
+
+        self_mock._print_summary.assert_called()
+        self_mock._conn.execute.assert_called_once_with(query)
+        self_mock._conn.commit.assert_called_once_with()
 
 
 class TestControllerHappyPathNonChaseCSV(TestCase):
