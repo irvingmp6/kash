@@ -9,10 +9,7 @@ from .user_settings import UserSettings
 
 select_transaction_ids_from_transactions_table = "SELECT transaction_id FROM bank_transactions;"
 select_all_from_transactions_table = "SELECT * FROM bank_transactions;"
-insert_into_bank_transactions_table = """
-    INSERT INTO bank_transactions (Account_Alias, Transaction_ID, Details, Posting_Date, Description, Amount, Type, Balance, Check_or_Slip_num, Reconciled)
-    VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
-"""
+insert_into_bank_transactions_table = """INSERT INTO bank_transactions (Account_Alias, Transaction_ID, Details, Posting_Date, Description, Amount, Type, Balance, Check_or_Slip_num, Reconciled) VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?);"""
 
 def format_date(date_str, raw_format, new_format):
     date_obj = datetime.strptime(date_str, raw_format)
@@ -314,6 +311,24 @@ class Controller:
                 self._conn.execute(insert_into_bank_transactions_table, values)
 
         # Print a summary transactions to be added
+        self._print_summary(df)
+
+        # Commit changes to the database if required
+        if self._commit:
+            self._conn.commit()
+
+    def _print_summary(self, df:pandas.DataFrame) -> None:
+        """
+        Prints a summary of transactions to be added based on the provided DataFrame.
+        It prints the number of new transactions and displays details such as posting 
+        date, amount, description, and account alias in a formatted table.
+
+        Args:
+            df (pandas.DataFrame): DataFrame containing transaction data.
+
+        Returns:
+            None
+        """
         new_transactions_count = len(df.index)
         if new_transactions_count:
             print(f"{len(df.index)} new transaction(s):")
@@ -339,7 +354,3 @@ class Controller:
             print(f"+{small_column}+{small_column}+{large_column}+{small_column}+")
         else:
             print("No new transactions")
-
-        # Commit changes to the database if required
-        if self._commit:
-            self._conn.commit()
