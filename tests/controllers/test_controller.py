@@ -1,9 +1,9 @@
 from configparser import ConfigParser
-from io import BytesIO
 from unittest import TestCase
 from unittest.mock import MagicMock
 from unittest.mock import patch
 from unittest.mock import call
+from io import BytesIO
 
 import pandas as pd
 from pandas.testing import assert_frame_equal
@@ -49,6 +49,7 @@ class TestControllerHappyPathChaseCSV(TestCase):
             "Transaction ID": ["DEF234"]
         }
         cls.processed_df = pd.DataFrame(data=cls.processed_df_data)
+        cls.df_with_no_rows = cls.processed_df.head(0)
 
     @classmethod
     def tearDownClass(cls):
@@ -193,17 +194,117 @@ class TestControllerHappyPathChaseCSV(TestCase):
         self_mock._commit = True
         self_mock._conn = MagicMock()
         df = self.processed_df
-        query = """INSERT INTO bank_transactions (Account_Alias, Transaction_ID, Details, Posting_Date, Description, Amount, Type, Balance, Check_or_Slip_num, Reconciled),VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?);', ('Chase Bank', 'DEF234', 'DEBIT', '2024-02-01', 'SPAM BAR HAM', '-7.77', 'DEBIT_CARD', '6.66', '', 'N')"""
 
         Controller._insert_df_into_bank_transactions_table(self_mock, df)
 
         self_mock._print_summary.assert_called()
-        self_mock._conn.execute.assert_called_once_with(query)
+        query = 'INSERT INTO bank_transactions (Account_Alias, Transaction_ID, Details, Posting_Date, Description, Amount, Type, Balance, Check_or_Slip_num, Reconciled) VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?);'
+        values = ('Chase Bank', 'DEF234', 'DEBIT', '2024-02-01', 'SPAM BAR HAM', '-7.77', 'DEBIT_CARD', '6.66', '', 'N')
+        self_mock._conn.execute.assert_called_once_with(query, values)
         self_mock._conn.commit.assert_called_once_with()
 
+    @patch('src.controllers.controller.print')
+    def test__print_summary_df_with_rows(self, print_mock):
+        self_mock = MagicMock()
+        df = self.processed_df
+
+        Controller._print_summary(self_mock, df)
+
+        expected_calls = [
+            call('1 new transaction(s):'),
+            call('+---------------+---------------+------------------------------------------+---------------+'),
+            call('| POSTING DATE  |    AMOUNT     |               DESCRIPTION                | ACOUNT ALIAS  |'),
+            call('+---------------+---------------+------------------------------------------+---------------+'),
+            call('| 2/01/2024     |          -7.77| SPAM BAR HAM                           | Chase Bank    |'),
+            call('+---------------+---------------+------------------------------------------+---------------+')
+        ]
+
+        self.assertEqual(print_mock.call_args_list, expected_calls)
+
+    @patch('src.controllers.controller.print')
+    def test__print_summary_df_with_no_rows(self, print_mock):
+        self_mock = MagicMock()
+        df = self.df_with_no_rows
+
+        Controller._print_summary(self_mock, df)
+
+        print_mock.assert_called_once_with("No new transactions")
 
 class TestControllerHappyPathNonChaseCSV(TestCase):
-    pass
+    def setUp(self):
+        pass
+
+    def tearDown(self):
+        pass
+
+    @classmethod
+    def setUpClass(cls):
+        cls.conn = MagicMock()
+        cls.new_csv_files = ["Non_Chase_bank_activity_1.csv"]
+        cls.commit = False
+        cls.config = ConfigParser()
+        cls.config.add_section('GENERAL')
+        cls.config.set('GENERAL', 'details', '')
+        cls.config.set('GENERAL', 'posting_date', ' 0 ')
+        cls.config.set('GENERAL', 'description', ' 4 ')
+        cls.config.set('GENERAL', 'amount', ' 1 ')
+        cls.config.set('GENERAL', 'type', '')
+        cls.config.set('GENERAL', 'balance', '')
+        cls.config.set('GENERAL', 'check_or_slip_number', '')
+        cls.config.set('GENERAL', 'extra_1', '')
+        cls.config.add_section('HEADER')
+        cls.config.set('HEADER', 'has_header', ' True ')
+        cls.non_chase_csv_file_w_header_bytes = (b"date posted,transaction amount,FOO,BAR,transaction desc,BAZ\n"
+                                       b"1/25/2024,-30,,,7-11 #5486792135 PURCHASE                             1/24/2024,\n"
+                                       b"1/24/2024,-1.99,,,VALERIO #938457156 PURCHASE                             1/23/2024,")
+        cls.non_chase_csv_file_w_header_bytes_io = BytesIO(cls.non_chase_csv_file_w_header_bytes)
+        # cls.non_chase_csv_file_w_header_df = pd.read_csv(cls.non_chase_csv_file_w_header_bytes_io)
+        cls.non_chase_csv_file_wo_header_bytes = (b"1/25/2024,-30,,,7-11 #5486792135 PURCHASE                             1/24/2024,\n"
+                                       b"1/24/2024,-1.99,,,VALERIO #938457156 PURCHASE                             1/23/2024,")
+        cls.non_chase_csv_file_wo_header_bytes_io = BytesIO(cls.non_chase_csv_file_wo_header_bytes)
+        # cls.non_chase_csv_file_wo_header_df = pd.read_csv(cls.non_chase_csv_file_wo_header_bytes_io)
+        cls.unprocessed_df_data = {
+            "Details": ["",""],
+            "Posting Date": ["1/25/2024","1/24/2024"],
+            "Description": ["7-11 #5486792135 PURCHASE                             1/24/2024",
+                            "1/24/2024,-1.99,,,VALERIO #938457156 PURCHASE                             1/23/2024"],
+            "Amount": ["-30","-1.99"],
+            "Type": ["POS","POS"],
+            "Balance": ["",""],
+            "Check or Slip #": ["",""],
+            "Extra_1": ["",""],
+        }
+        cls.unprocessed_df = pd.DataFrame(data=cls.unprocessed_df_data)
+        cls.processed_df_data = {
+            "Details": ["",""],
+            "Posting Date": ["1/25/2024","1/24/2024"],
+            "Description": ["7-11 #5486792135 PURCHASE                             1/24/2024",
+                            "1/24/2024,-1.99,,,VALERIO #938457156 PURCHASE                             1/23/2024"],
+            "Amount": ["-30","-1.99"],
+            "Type": ["POS","POS"],
+            "Balance": ["",""],
+            "Check or Slip #": ["",""],
+            "Extra_1": ["",""],
+            "Account Alias": ["Non Chase Bank","Non Chase Bank"],
+            "Transaction ID": ["ABC123","DEF234"]
+        }
+        cls.processed_df = pd.DataFrame(data=cls.processed_df_data)
+
+    @classmethod
+    def tearDownClass(cls):
+        pass
+
+    def test__create_dataframe_from_foreign_csv(self):
+        csv_file = self.non_chase_csv_file_w_header_bytes_io
+        self_mock = MagicMock()
+        self_mock._config = self.config
+        self_mock._convert_dataframe_to_chase_format.return_value = self.unprocessed_df
+        self_mock._add_required_columns_to_df.return_value = self.processed_df
+
+        result = Controller._create_dataframe_from_foreign_csv(self_mock, csv_file)
+
+        # self_mock._convert_dataframe_to_chase_format.called_once_with(self.non_chase_csv_file_w_header_df)
+        # assert_frame_equal(result, self.processed_df)
 
 
 class TesatControllerBadConfigGeneralSectioonMissingKey(TestCase):

@@ -124,21 +124,19 @@ class Controller:
         """
         try:
             # Extract whether the CSV file has a header from configuration
-            header = strtobool(self._config["HEADER"].get("has_header").strip())
+            config_value = self._config["HEADER"].get("has_header")
+            csv_has_header_row = strtobool(config_value.strip())
         except AttributeError as e:
-            # Handle missing or incorrect configuration for the header
-            message = (f"{e}.\nTroubleshooting help: Ensure the HEADER section contains the proper definitions"
+            # Handle missing or incorrect configuration for the has_
+            message = (f"{e}.\nTroubleshooting help: Ensure the has_ section contains the proper definitions"
                     f" in the config file. Refer to the configs provided in src/test_files/ for help.")
             raise ConfigSectionIncompleteError(message)
         
-        # Read the CSV file to a temporary DataFrame to determine the number of columns
-        temp_df = pandas.read_csv(csv_file, delimiter=",", header=None, skiprows=[0])
-
-        # Convert all columns to string datatype
-        converters = {i: str for i in range(temp_df.shape[1])}
+        converters = self._get_converters(csv_file)
         
         # Read the CSV file to DataFrame, considering header existence
-        if header:
+        if csv_has_header_row:
+            print(pandas.read_csv(csv_file))
             df = pandas.read_csv(csv_file, delimiter=",", header=None, converters=converters, skiprows=[0])
         else:
             df = pandas.read_csv(csv_file, delimiter=",", header=None, converters=converters)
@@ -148,6 +146,23 @@ class Controller:
         
         # Create ingestible DataFrame
         return self._add_required_columns_to_df(df)
+    
+    def _get_converters(self, csv_file):
+        """
+        This method reads the CSV file into a temporary DataFrame to determine the number of columns.
+        It then creates a dictionary of converters, where each column index is mapped to a converter function that converts the column values to strings.
+
+        Args:
+            csv_file (str): Path to the CSV file.
+
+        Returns:
+            dict: A dictionary mapping column indices to converter functions.
+        """
+        # Read the CSV file to a temporary DataFrame to determine the number of columns
+        temp_df = pandas.read_csv(csv_file, delimiter=",", header=None, skiprows=[0])
+
+        # Convert all columns to string datatype
+        return {i: str for i in range(temp_df.shape[1])}
 
     def _convert_dataframe_to_chase_format(self, df: pandas.DataFrame):
         """
