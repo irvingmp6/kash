@@ -1,20 +1,57 @@
 import hashlib
 import argparse
-import pandas
 from datetime import datetime
 from distutils.util import strtobool
+
+import pandas
 
 from src.interface_funcs import ConfigSectionIncompleteError
 from .user_settings import UserSettings
 
-select_transaction_ids_from_transactions_table = "SELECT transaction_id FROM bank_transactions;"
-select_all_from_transactions_table = "SELECT * FROM bank_transactions;"
-insert_into_bank_transactions_table = """INSERT INTO bank_transactions (Account_Alias, Transaction_ID, Details, Posting_Date, Description, Amount, Type, Balance, Check_or_Slip_num, Reconciled) VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?);"""
+select_transaction_ids_from_bank_activity_table = "SELECT transaction_id FROM bank_activity;"
+select_all_from_bank_activity_table = "SELECT * FROM bank_activity;"
+insert_into_bank_activity_table = """INSERT INTO bank_activity (Account_Alias, Transaction_ID, Details, Posting_Date, Description, Amount, Type, Balance, Check_or_Slip_num, Reconciled) VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?);"""
 
-def format_date(date_str, raw_format:str, new_format:str) -> str:
+def format_date(date_str: str, raw_format: str, new_format: str) -> str:
+    """
+    Format a date string from one format to another.
+
+    Args:
+        date_str (str): The date string to be formatted.
+        raw_format (str): The format of the input date string.
+        new_format (str): The desired format of the output date string.
+
+    Returns:
+        str: The formatted date string.
+    """
+    # Convert the date string to a datetime object using the raw format
     date_obj = datetime.strptime(date_str, raw_format)
+    
+    # Format the datetime object using the new format and return the result
     return date_obj.strftime(new_format)
 
+def format_amount(amount: str|int|float) -> float:
+    """
+    Format an amount string, int, or float value.
+
+    Args:
+        amount (str or float): The amount to be formatted.
+
+    Returns:
+        float: The formatted amount.
+    """
+    if type(amount) == str:
+        # Remove any dollar sign from the amount string
+        amount = amount.replace("$", "")
+        
+        # If the amount is in parentheses, it represents a negative value
+        if amount[0] == "(" and amount[-1] == ")":
+            # Convert the negative amount string to a float by removing parentheses and appending a negative sign
+            amount = "-" + amount[1:-1]
+        
+    # Convert to a float and return it
+    return float(amount)
+    
 
 class Controller:
     """
@@ -28,7 +65,7 @@ class Controller:
 
     Attributes:
         _user_settings (UserSettings): Instance of UserSettings class containing user settings and configurations.
-        csv_files (list): List of CSV file paths to be processed.
+        csv_file (list): List of CSV file paths to be processed.
         _db_interface (DataBaseInterface): Instance of DataBaseInterface class for database interaction.
         _existing_transaction_ids (list): List of existing transaction IDs in the database.
         _csv_handler (CSVHandler): Instance of CSVHandler class for CSV file handling and data extraction.
@@ -46,7 +83,7 @@ class Controller:
             args (argparse.Namespace): Namespace object containing command-line arguments.
         """
         self._user_settings = UserSettings(args)
-        self.csv_files = self._user_settings.csv_files
+        self.csv_file = self._user_settings.csv_file
         self._db_interface = DataBaseInterface(self._user_settings)
         self._existing_transaction_ids = self._db_interface.get_existing_transaction_ids()
         self._csv_handler = CSVHandler(self._user_settings, self._existing_transaction_ids)
@@ -55,18 +92,17 @@ class Controller:
         """
         Start the transaction data processing workflow.
 
-        This method iterates over each CSV file in the list of CSV files and performs the following steps:
+        This method performs the following steps on the CSV file passed:
         - Extracts new settled transactions DataFrame from the CSV file using the CSVHandler.
-        - Inserts the DataFrame into the bank transactions table using the DataBaseInterface.
+        - Inserts the DataFrame into the bank activity table using the DataBaseInterface.
         - Prints a summary of the new transactions.
 
         Returns:
             None
         """
-        for csv_file in self.csv_files:
-            new_transactions_df = self._csv_handler.get_new_settled_transactions_df(csv_file)
-            self._db_interface.insert_df_into_bank_transactions_table(new_transactions_df)
-            Controller.print_summary(new_transactions_df)
+        new_transactions_df = self._csv_handler.get_new_settled_transactions_df(self.csv_file)
+        self._db_interface.insert_df_into_bank_activity_table(new_transactions_df)
+        Controller.print_summary(new_transactions_df)
 
     @staticmethod
     def print_summary(df:pandas.DataFrame) -> None:
@@ -96,7 +132,7 @@ class Controller:
             for _, row in df.iterrows():
                 posting_date = row["Posting Date"]
                 posting_date = "{: <14}".format(posting_date)
-                amount = str(row["Amount"])
+                amount = format_amount(row["Amount"])
                 amount = "{: >15}".format(amount)
                 description = row["Description"]
                 description = "{: <38}".format(description[:40])
@@ -109,26 +145,48 @@ class Controller:
 
 
 class DataBaseInterface:
+    """
+    Class to interface with the database.
+
+    Attributes:
+        _user_settings (UserSettings): User settings object.
+        _conn: Connection to the database.
+        _commit (bool): Flag indicating whether changes should be committed to the database.
+
+    Methods:
+        get_existing_transaction_ids() -> list: Retrieve existing transaction IDs from the database.
+        insert_df_into_bank_activity_table(df: pandas.DataFrame) -> None: Insert DataFrame into the bank activity table.
+    """
     def __init__(self, user_settings: UserSettings) -> None:
+        """
+        Initialize DataBaseInterface with user settings.
+
+        Args:
+            user_settings (UserSettings): User settings object.
+        """
         self._user_settings = user_settings
         self._conn = self._user_settings.conn
         self._commit = self._user_settings.commit
 
     def get_existing_transaction_ids(self) -> list:
-        records = self._conn.execute(select_transaction_ids_from_transactions_table).fetchall()
+        """
+        Retrieve existing transaction IDs from the database.
+
+        Returns:
+            list: List of existing transaction IDs.
+        """
+        records = self._conn.execute(select_transaction_ids_from_bank_activity_table).fetchall()
         return [record[0] for record in records]
 
-    def insert_df_into_bank_transactions_table(self, df:pandas.DataFrame) -> None:
+    def insert_df_into_bank_activity_table(self, df:pandas.DataFrame) -> None:
         """
-        Insert DataFrame into the bank transactions table.
+        Insert DataFrame into the bank activity table.
 
         Args:
             df (pandas.DataFrame): DataFrame containing transaction data.
 
-        This method iterates over each row in the DataFrame, retrieves 
-        transaction information, formats the data, and inserts it into 
-        the bank transactions table. If `commit` is set to True, changes 
-        are committed to the database.
+        Returns:
+            None
         """
         # Reset index of the DataFrame
         df = df.reset_index()
@@ -142,7 +200,7 @@ class DataBaseInterface:
             posting_date = row["Posting Date"]
             formatted_posting_date = format_date(posting_date, "%m/%d/%Y", "%Y-%m-%d")
             description = row["Description"]
-            amount = row["Amount"]
+            amount = format_amount(row["Amount"])
             type_ = row["Type"]
             balance = row["Balance"]
             check_or_slip_num = row["Check or Slip #"]
@@ -162,10 +220,7 @@ class DataBaseInterface:
 
             # Execute SQL query to insert values into the database
             if self._commit:
-                self._conn.execute(insert_into_bank_transactions_table, values)
-
-        # Print a summary transactions to be added
-        self._print_summary(df)
+                self._conn.execute(insert_into_bank_activity_table, values)
 
         # Commit changes to the database if required
         if self._commit:
@@ -173,9 +228,38 @@ class DataBaseInterface:
 
 
 class CSVHandler:
+    """
+    Class to handle CSV file operations.
+
+    Attributes:
+        _user_settings (UserSettings): User settings object.
+        _csv_file (list): List of CSV files.
+        _config (dict): Configuration settings.
+        _account_alias (str): Account alias.
+        _chase_column_config_name_map (dict): Mapping of column names between Chase format and original format.
+        _chase_column_names (list): List of column names in Chase format.
+        existing_transaction_ids (list): List of existing transaction IDs.
+
+    Methods:
+        _get_chase_column_config_name_map(): Get mapping of column names between Chase format and original format.
+        _get_chase_column_names(): Get list of column names in Chase format.
+        get_new_settled_transactions_df(csv_file: str) -> pandas.DataFrame: Get DataFrame of new settled transactions from CSV file.
+        _create_dataframe_from_foreign_csv(csv_file: str): Create DataFrame from a foreign CSV file.
+        _get_converters(csv_file: str): Get converters for reading CSV file.
+        _convert_dataframe_to_chase_format(df: pandas.DataFrame): Convert DataFrame to Chase format.
+        _create_dataframe_from_chase_csv(csv_file: str): Create DataFrame from a Chase CSV file.
+        _add_required_columns_to_df(df: pandas.DataFrame) -> pandas.DataFrame: Add required columns to DataFrame.
+    """
     def __init__(self, user_settings:UserSettings, existing_transaction_ids:list) -> None:
+        """
+        Initialize CSVHandler with user settings and existing transaction IDs.
+
+        Args:
+            user_settings (UserSettings): User settings object.
+            existing_transaction_ids (list): List of existing transaction IDs.
+        """
         self._user_settings = user_settings
-        self._new_csv_files = self._user_settings.new_csv_files
+        self._csv_file = self._user_settings.csv_file
         self._config = self._user_settings.config
         self._account_alias = self._user_settings.account_alias
         self._chase_column_config_name_map = self._get_chase_column_config_name_map()
@@ -183,6 +267,12 @@ class CSVHandler:
         self.existing_transaction_ids = existing_transaction_ids
 
     def _get_chase_column_config_name_map(self) -> dict:
+        """
+        Get mapping of column names between Chase format and original format.
+
+        Returns:
+            dict: Mapping of column names.
+        """
         return {
             "details" : "Details",
             "posting_date" : "Posting Date",
@@ -195,10 +285,25 @@ class CSVHandler:
         }
 
     def _get_chase_column_names(self) -> list:
+        """
+        Get list of column names in Chase format.
+
+        Returns:
+            list: List of column names.
+        """
         return [self._chase_column_config_name_map[k]
                 for k in self._chase_column_config_name_map.keys()]
 
     def get_new_settled_transactions_df(self, csv_file:str) -> pandas.DataFrame:
+        """
+        Get DataFrame of new settled transactions from CSV file.
+
+        Args:
+            csv_file (str): Path to CSV file.
+
+        Returns:
+            pandas.DataFrame: DataFrame of new settled transactions.
+        """
         # Determine if a config was provided
         if self._config:
             # Create DataFrame from a foreign CSV file
@@ -210,16 +315,15 @@ class CSVHandler:
         # Filter out rows with empty balance
         csv_trans_df = csv_trans_df[csv_trans_df['Balance'] != ' ']
 
-        # Exclude transactions already present in the bank transactions table
+        # Exclude transactions already present in the bank activity table
         return csv_trans_df[~csv_trans_df["Transaction ID"].isin(self.existing_transaction_ids)]
 
-    def _create_dataframe_from_foreign_csv(self, csv_file:str):
+    def _create_dataframe_from_foreign_csv(self, csv_file:str) -> pandas.DataFrame:
         """
         Create DataFrame from a foreign CSV file.
 
         Args:
             csv_file (str): Path to CSV file.
-            account_alias (str): Account alias.
 
         Returns:
             pandas.DataFrame: DataFrame created from the CSV file.
@@ -241,25 +345,22 @@ class CSVHandler:
             df = pandas.read_csv(csv_file, delimiter=",", header=None, converters=converters, skiprows=[0])
         else:
             df = pandas.read_csv(csv_file, delimiter=",", header=None, converters=converters)
-        
+
         # Convert DataFrame to Chase format
         df = self._convert_dataframe_to_chase_format(df)
         
         # Create ingestible DataFrame
         return self._add_required_columns_to_df(df)
     
-    def _get_converters(self, csv_file:str):
+    def _get_converters(self, csv_file:str) -> dict:
         """
-        This method reads the CSV file into a temporary DataFrame 
-        to determine the number of columns. It then creates a dictionary 
-        of converters, where each column index is mapped to a 
-        conversion type of str.
+        Get converters for reading CSV file.
 
         Args:
-            csv_file (str): Path to the CSV file.
+            csv_file (str): Path to CSV file.
 
         Returns:
-            dict: A dictionary mapping column indices to str.
+            dict: Dictionary of converters.
         """
         # Read the CSV file to a temporary DataFrame to determine the number of columns
         temp_df = pandas.read_csv(csv_file, delimiter=",", header=None, skiprows=[0])
@@ -267,7 +368,7 @@ class CSVHandler:
         # Convert all columns to string datatype
         return {i: str for i in range(temp_df.shape[1])}
 
-    def _convert_dataframe_to_chase_format(self, df:pandas.DataFrame):
+    def _convert_dataframe_to_chase_format(self, df:pandas.DataFrame) -> pandas.DataFrame:
         """
         Convert DataFrame to Chase format.
 
@@ -309,7 +410,7 @@ class CSVHandler:
         df = df.loc[:, df.columns.intersection(self._chase_column_names)]
         return df
 
-    def _create_dataframe_from_chase_csv(self, csv_file:str):
+    def _create_dataframe_from_chase_csv(self, csv_file:str) -> pandas.DataFrame:
         """
         Create DataFrame from a Chase CSV file.
 
@@ -333,22 +434,21 @@ class CSVHandler:
         """
         Adds columns "Transaction ID" and "Account Alias" to DataFrame.
 
-        Transaction ID is a calculated hash from concatenating the columns:
+        The "Transaction ID" is the row's unique identifier. It is a calculated hash of the values of other columns:
             Details
-            Posting Date
-            Description
+            Postind Date
+            Descsription
             Amount
             Type
             Balance
-            Check or Slip #
+            Check or Slip Num
             Account Alias
 
         Args:
             df (pandas.DataFrame): DataFrame to be processed.
-            account_alias (str): Account alias.
 
         Returns:
-            pandas.DataFrame: Processed DataFrame with newly added columns: "Transaction ID" and "Account Alias"
+            pandas.DataFrame: Processed DataFrame with newly added columns: "Transaction ID" and "Account Alias".
         """
         # Initialize lists to store transaction IDs and account aliases
         transaction_ids = []

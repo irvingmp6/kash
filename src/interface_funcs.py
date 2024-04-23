@@ -3,17 +3,17 @@ from pathlib import Path
 from datetime import datetime
 
 def db_connection(path):
-    def create_bank_transactions_table(conn):
+    def create_bank_activity_table(conn):
         query = """
             CREATE TABLE
-                bank_transactions(ID INTEGER PRIMARY KEY, Account_Alias, Transaction_ID, Details, 
+                bank_activity(ID INTEGER PRIMARY KEY, Account_Alias, Transaction_ID, Details, 
                     Posting_Date, Description,  Amount, 
                     Type, Balance, Check_or_Slip_num, Reconciled,
                     Timestamp DATETIME DEFAULT CURRENT_TIMESTAMP);
         """
         conn.execute(query)
 
-    def check_transactions_table_exists(conn):
+    def check_bank_activity_table_exists(conn):
         query = """
             SELECT 
                     Account_Alias, Transaction_ID, Details, 
@@ -21,7 +21,7 @@ def db_connection(path):
                     Balance, Check_or_Slip_num, Reconciled, 
                     Timestamp
             FROM
-                    bank_transactions;
+                    bank_activity;
         """
         conn.execute(query)
 
@@ -39,12 +39,12 @@ def db_connection(path):
     con = sqlite3.connect(path)
 
     if new_db:
-        create_bank_transactions_table(con)
+        create_bank_activity_table(con)
         print(f"Created new DB:\n{filepath}")
 
     else:
         try:
-            check_transactions_table_exists(con)
+            check_bank_activity_table_exists(con)
             print(f"Connected to existing DB:\n{filepath}")
         except sqlite3.OperationalError as e:
             raise TransactionsTableDoesNotExist(e)

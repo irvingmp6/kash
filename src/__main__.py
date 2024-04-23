@@ -30,11 +30,10 @@ def get_args():
         help=textwrap.dedent(help_menu['import']['sqlite_db'])
     )
     import_parser.add_argument(
-        'csv_files',
-        metavar='<CSV FILES>',
-        nargs='+',
+        'csv_file',
+        metavar='<CSV FILE>',
         default=None,
-        help=textwrap.dedent(help_menu['import']['csv_files'])
+        help=textwrap.dedent(help_menu['import']['csv_file'])
         )
     import_parser.add_argument(
         '--account-alias', '-a',
@@ -66,11 +65,10 @@ def get_args():
         help=textwrap.dedent(help_menu['import-raw']['config'])
     )
     import_raw_parser.add_argument(
-        'csv_files',
-        metavar='<CSV FILES>',
-        nargs='+',
+        'csv_file',
+        metavar='<CSV FILE>',
         default=None,
-        help=textwrap.dedent(help_menu['import']['csv_files'])
+        help=textwrap.dedent(help_menu['import']['csv_file'])
         )
     import_raw_parser.add_argument(
         '--account-alias', '-a',
