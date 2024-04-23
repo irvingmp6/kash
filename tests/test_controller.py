@@ -10,10 +10,23 @@ import pandas as pd
 from numpy import NaN
 from pandas.testing import assert_frame_equal
 
+from src.controller import format_date
+from src.controller import format_amount
 from src.controller import Controller
 from src.controller import DataBaseInterface
 from src.controller import CSVHandler
-from src.controller import insert_into_bank_activity_table
+from src.interface_funcs import ConfigSectionIncompleteError
+
+class TestFormattingFunctions(TestCase):
+    def test_format_date(self):
+        self.assertEqual(format_date("04/16/2024", "%m/%d/%Y", "%Y-%m-%d"), "2024-04-16")
+        self.assertEqual(format_date("16-04-2024", "%d-%m-%Y", "%Y/%m/%d"), "2024/04/16")
+
+    def test_format_amount(self):
+        self.assertEqual(format_amount("$100.00"), 100.00)
+        self.assertEqual(format_amount("($50.00)"), -50.00)
+        self.assertEqual(format_amount(75), 75.00)
+        self.assertEqual(format_amount(-25.50), -25.50)
 
 
 class TestController(TestCase):
@@ -300,12 +313,6 @@ class TestCSVHandlerHappyPathChaseCSV(TestCase):
 
 
 class TestCSVHandlerHappyPathNonChaseCSV(TestCase):
-    def setUp(self):
-        pass
-
-    def tearDown(self):
-        pass
-
     @classmethod
     def setUpClass(cls):
         cls.conn = MagicMock()
@@ -323,9 +330,11 @@ class TestCSVHandlerHappyPathNonChaseCSV(TestCase):
         cls.config.set('GENERAL', 'extra_1', '')
         cls.config.add_section('HEADER')
         cls.config.set('HEADER', 'has_header', ' True ')
-        cls.non_chase_csv_file_w_header_bytes = (b"date posted,transaction amount,type,BAR,transaction desc,BAZ\n"
-                                       b"1/25/2024,-30,POS,,7-11 #5486792135 PURCHASE                             1/24/2024,\n"
-                                       b"1/24/2024,-1.99,POS,,VALERO #938457156 PURCHASE                             1/23/2024,")
+        cls.non_chase_csv_file_w_header_bytes = (
+            b"date posted,transaction amount,type,BAR,transaction desc,BAZ\n"
+            b"1/25/2024,-30,POS,,7-11 #5486792135 PURCHASE                             1/24/2024,\n"
+            b"1/24/2024,-1.99,POS,,VALERO #938457156 PURCHASE                             1/23/2024,"
+        )
         cls.non_chase_csv_file_dict_data = {
             0 : ["1/25/2024","1/24/2024"],
             1 : ["-30","-1.99"],
@@ -336,8 +345,10 @@ class TestCSVHandlerHappyPathNonChaseCSV(TestCase):
             5 : [NaN,NaN]
         }
         cls.non_chase_csv_file_w_header_df = pd.DataFrame(data=cls.non_chase_csv_file_dict_data)
-        cls.non_chase_csv_file_wo_header_bytes = (b"1/25/2024,-30,,,7-11 #5486792135 PURCHASE                             1/24/2024,\n"
-                                       b"1/24/2024,-1.99,,,VALERO #938457156 PURCHASE                             1/23/2024,")
+        cls.non_chase_csv_file_wo_header_bytes = (
+            b"1/25/2024,-30,,,7-11 #5486792135 PURCHASE                             1/24/2024,\n"
+            b"1/24/2024,-1.99,,,VALERO #938457156 PURCHASE                             1/23/2024,"
+        )
         cls.unprocessed_df_data = {
             "Details": ["",""],
             "Posting Date": ["1/25/2024","1/24/2024"],
@@ -364,10 +375,6 @@ class TestCSVHandlerHappyPathNonChaseCSV(TestCase):
             "Transaction ID": ["ABC123","DEF234"]
         }
         cls.processed_df = pd.DataFrame(data=cls.processed_df_data)
-
-    @classmethod
-    def tearDownClass(cls):
-        pass
 
     @patch('src.controller.CSVHandler._create_dataframe_from_chase_csv')
     @patch('src.controller.CSVHandler._create_dataframe_from_foreign_csv')
@@ -487,9 +494,138 @@ class TestCSVHandlerHappyPathNonChaseCSV(TestCase):
         assert_frame_equal(result, expected_result)
         
 
-# class TesatCSVHandlerBadConfigGeneralSectioonMissingKey(TestCase):
-#     pass
+class TesatCSVHandlerBadConfigHeaderSectionMissingKey(TestCase):
+
+    @classmethod
+    def testSetUpClass(cls):
+        cls.non_chase_csv_file_w_header_bytes = (
+            b"date posted,transaction amount,type,BAR,transaction desc,BAZ\n"
+            b"1/25/2024,-30,POS,,7-11 #5486792135 PURCHASE                             1/24/2024,\n"
+            b"1/24/2024,-1.99,POS,,VALERO #938457156 PURCHASE                             1/23/2024,"
+        )
+
+    def test__create_dataframe_from_foreign_csv_with_header_row_bad_HEADER_config(self):
+        self_mock = MagicMock()
+        self_mock._config = ConfigParser()
+        self_mock._config.add_section('HEADER')
+        self_mock._config.set('HEADER', 'has_header', 'FOO')
+        csv_file = BytesIO(self.non_chase_csv_file_w_header_bytes)
+
+        with self.assertRaises(ConfigSectionIncompleteError) as context:
+            CSVHandler._create_dataframe_from_foreign_csv(self_mock, csv_file)
+
+        self.assertTrue('Troubleshooting help' in str(context.exception))
+
+    def test__create_dataframe_from_foreign_csv_with_header_row_missing_HEADER_config(self):
+        self_mock = MagicMock()
+        self_mock._config = ConfigParser()
+        self_mock._config.add_section('HEADER')
+        csv_file = BytesIO(self.non_chase_csv_file_w_header_bytes)
+
+        with self.assertRaises(ConfigSectionIncompleteError) as context:
+            CSVHandler._create_dataframe_from_foreign_csv(self_mock, csv_file)
+
+        self.assertTrue('Troubleshooting help' in str(context.exception))
+
+    def test__create_dataframe_from_foreign_csv_with_header_row_missing_HEADER_section(self):
+        self_mock = MagicMock()
+        self_mock._config = ConfigParser()
+        csv_file = BytesIO(self.non_chase_csv_file_w_header_bytes)
+
+        with self.assertRaises(ConfigSectionIncompleteError) as context:
+            CSVHandler._create_dataframe_from_foreign_csv(self_mock, csv_file)
+
+        self.assertTrue('Troubleshooting help' in str(context.exception))
 
 
-# class TesatCSVHandlerBadConfigHeaderSectioonMissingKey(TestCase):
-#     pass
+class TesatCSVHandlerBadConfigGeneralSectionMissingKey(TestCase):
+
+    @classmethod
+    def testSetUp(cls):
+        cls.non_chase_csv_file_w_header_bytes = (
+            b"date posted,transaction amount,type,BAR,transaction desc,BAZ\n"
+            b"1/25/2024,-30,POS,,7-11 #5486792135 PURCHASE                             1/24/2024,\n"
+            b"1/24/2024,-1.99,POS,,VALERO #938457156 PURCHASE                             1/23/2024,"
+        )
+
+    def test__convert_dataframe_to_chase_format_missing_GENERAL_section(self):
+        self_mock = MagicMock()
+        self_mock._config = ConfigParser()
+        self_mock._chase_column_config_name_map = {
+            "details" : "Details",
+            "posting_date" : "Posting Date",
+            "description" : "Description",
+            "amount" : "Amount",
+            "type" : "Type",
+            "balance" : "Balance",
+            "check_or_slip_number" : "Check or Slip #",
+            "extra_1" : "Extra 1"
+        }
+        self_mock._chase_column_names = [self_mock._chase_column_config_name_map[k]
+                for k in self_mock._chase_column_config_name_map.keys()]
+        csv_file = BytesIO(self.non_chase_csv_file_w_header_bytes)
+        converters = {i: str for i in range(6)}
+        df = pd.read_csv(csv_file, delimiter=",", header=None, converters=converters, skiprows=[0])
+
+        with self.assertRaises(ConfigSectionIncompleteError) as context:
+            CSVHandler._convert_dataframe_to_chase_format(self_mock, df)
+
+        self.assertTrue('Troubleshooting help' in str(context.exception))
+
+    def test__convert_dataframe_to_chase_format_missing_GENERAL_config(self):
+        self_mock = MagicMock()
+        self_mock._config = ConfigParser()
+        self_mock._config.add_section("GENERAL")
+        self_mock._chase_column_config_name_map = {
+            "details" : "Details",
+            "posting_date" : "Posting Date",
+            "description" : "Description",
+            "amount" : "Amount",
+            "type" : "Type",
+            "balance" : "Balance",
+            "check_or_slip_number" : "Check or Slip #",
+            "extra_1" : "Extra 1"
+        }
+        self_mock._chase_column_names = [self_mock._chase_column_config_name_map[k]
+                for k in self_mock._chase_column_config_name_map.keys()]
+        csv_file = BytesIO(self.non_chase_csv_file_w_header_bytes)
+        converters = {i: str for i in range(6)}
+        df = pd.read_csv(csv_file, delimiter=",", header=None, converters=converters, skiprows=[0])
+
+        with self.assertRaises(ConfigSectionIncompleteError) as context:
+            CSVHandler._convert_dataframe_to_chase_format(self_mock, df)
+
+        self.assertTrue('Troubleshooting help' in str(context.exception))
+
+    def test__convert_dataframe_to_chase_format_bad_GENERAL_config(self):
+        self_mock = MagicMock()
+        self_mock._config = ConfigParser()
+        self_mock._config.add_section("GENERAL")
+        self_mock._config.set('GENERAL', 'details', '')
+        self_mock._config.set('GENERAL', 'posting_date', ' FOO ')
+        self_mock._config.set('GENERAL', 'description', ' 4 ')
+        self_mock._config.set('GENERAL', 'amount', ' 1 ')
+        self_mock._config.set('GENERAL', 'type', '2')
+        self_mock._config.set('GENERAL', 'balance', '')
+        self_mock._config.set('GENERAL', 'check_or_slip_number', '')
+        self_mock._config.set('GENERAL', 'extra_1', '')
+        self_mock._chase_column_config_name_map = {
+            "details" : "Details",
+            "posting_date" : "Posting Date",
+            "description" : "Description",
+            "amount" : "Amount",
+            "type" : "Type",
+            "balance" : "Balance",
+            "check_or_slip_number" : "Check or Slip #",
+            "extra_1" : "Extra 1"
+        }
+        self_mock._chase_column_names = [self_mock._chase_column_config_name_map[k]
+                for k in self_mock._chase_column_config_name_map.keys()]
+        csv_file = BytesIO(self.non_chase_csv_file_w_header_bytes)
+        converters = {i: str for i in range(6)}
+        df = pd.read_csv(csv_file, delimiter=",", header=None, converters=converters, skiprows=[0])
+
+        with self.assertRaises(ConfigSectionIncompleteError) as context:
+            CSVHandler._convert_dataframe_to_chase_format(self_mock, df)
+
+        self.assertTrue('Troubleshooting help' in str(context.exception))

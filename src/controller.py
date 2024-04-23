@@ -30,12 +30,12 @@ def format_date(date_str: str, raw_format: str, new_format: str) -> str:
     # Format the datetime object using the new format and return the result
     return date_obj.strftime(new_format)
 
-def format_amount(amount: str|int|float) -> float:
+def format_amount(amount) -> float:
     """
-    Format an amount string, int, or float value.
+    Formats an amount string, int, or float value.
 
     Args:
-        amount (str or float): The amount to be formatted.
+        amount (str int, or float): The amount to be formatted.
 
     Returns:
         float: The formatted amount.
@@ -332,14 +332,14 @@ class CSVHandler:
             # Extract whether the CSV file has a header from configuration
             config_value = self._config["HEADER"].get("has_header")
             csv_has_header_row = strtobool(config_value.strip())
-        except AttributeError as e:
+        except (KeyError, AttributeError, ValueError) as e:
             # Handle missing or incorrect configuration for the has_
             message = (f"{e}.\nTroubleshooting help: Ensure the has_ section contains the proper definitions"
                     f" in the config file. Refer to the configs provided in src/test_files/ for help.")
             raise ConfigSectionIncompleteError(message)
-        
+
         converters = self._get_converters(csv_file)
-        
+
         # Read the CSV file to DataFrame, considering header existence
         if csv_has_header_row:
             df = pandas.read_csv(csv_file, delimiter=",", header=None, converters=converters, skiprows=[0])
@@ -348,10 +348,10 @@ class CSVHandler:
 
         # Convert DataFrame to Chase format
         df = self._convert_dataframe_to_chase_format(df)
-        
+
         # Create ingestible DataFrame
         return self._add_required_columns_to_df(df)
-    
+
     def _get_converters(self, csv_file:str) -> dict:
         """
         Get converters for reading CSV file.
@@ -389,8 +389,8 @@ class CSVHandler:
             df.insert(df.shape[1], name, empty_values, True)
 
         try:
-            # Loop through the keys in the GENERAL section of the configuration
-            for key in self._config["GENERAL"]:
+            # Loop through the expected keys in the GENERAL section of the configuration
+            for key in self._chase_column_config_name_map.keys():
                 # Get the value associated with the key and strip any leading or trailing whitespace
                 value = self._config["GENERAL"][key].strip()
                 # Check if the value is not empty
