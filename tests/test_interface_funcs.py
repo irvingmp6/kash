@@ -40,7 +40,6 @@ class TestInterfaceFuncs(TestCase):
         conn_mock.execute.assert_called_once_with(query)
 
     @patch('src.interface_funcs.sqlite3')
-    @patch('src.interface_funcs.print')
     @patch('src.interface_funcs.create_bank_activity_table')
     @patch('src.interface_funcs.check_bank_activity_table_exists')
     @patch('src.interface_funcs.Path.is_file')
@@ -48,7 +47,6 @@ class TestInterfaceFuncs(TestCase):
                            is_file_mock, 
                            check_bank_activity_table_exists_mock, 
                            create_bank_activity_table_mock,
-                           print_mock,
                            sqlite3_mock):
         is_file_mock.return_value = True
         db_path = "path/to/database.db"
@@ -64,7 +62,6 @@ class TestInterfaceFuncs(TestCase):
         create_bank_activity_table_mock.assert_not_called()
 
     @patch('src.interface_funcs.sqlite3')
-    @patch('src.interface_funcs.print')
     @patch('src.interface_funcs.create_bank_activity_table')
     @patch('src.interface_funcs.check_bank_activity_table_exists')
     @patch('src.interface_funcs.Path.is_file')
@@ -72,18 +69,14 @@ class TestInterfaceFuncs(TestCase):
                            is_file_mock, 
                            check_bank_activity_table_exists_mock, 
                            create_bank_activity_table_mock,
-                           print_mock,
                            sqlite3_mock):
         is_file_mock.return_value = True
         db_path = "path/to/database.txt"
 
         with self.assertRaises(WrongFileExtension) as context:
             db_connection(db_path)
-            error_message = f"File extension is not '.db': {db_path}"
-            self.assertTrue(error_message==context.msg)
 
     @patch('src.interface_funcs.sqlite3')
-    @patch('src.interface_funcs.print')
     @patch('src.interface_funcs.create_bank_activity_table')
     @patch('src.interface_funcs.check_bank_activity_table_exists')
     @patch('src.interface_funcs.Path.is_file')
@@ -91,7 +84,6 @@ class TestInterfaceFuncs(TestCase):
                            is_file_mock, 
                            check_bank_activity_table_exists_mock, 
                            create_bank_activity_table_mock,
-                           print_mock,
                            sqlite3_mock):
         is_file_mock.return_value = False
         db_path = "path/to/database.db"
@@ -107,7 +99,6 @@ class TestInterfaceFuncs(TestCase):
         check_bank_activity_table_exists_mock.assert_not_called()
 
     @patch('src.interface_funcs.sqlite3')
-    @patch('src.interface_funcs.print')
     @patch('src.interface_funcs.create_bank_activity_table')
     @patch('src.interface_funcs.check_bank_activity_table_exists')
     @patch('src.interface_funcs.Path.is_file')
@@ -115,13 +106,27 @@ class TestInterfaceFuncs(TestCase):
                            is_file_mock, 
                            check_bank_activity_table_exists_mock, 
                            create_bank_activity_table_mock,
-                           print_mock,
                            sqlite3_mock):
         is_file_mock.return_value = True
-        db_path = "path/to/database.db"
+        db_path = "path/to/database.db" 
         check_bank_activity_table_exists_mock.side_effect = OperationalError
         
         with self.assertRaises(SQLOperationalError) as context:
             db_connection(db_path)
 
+    @patch('src.interface_funcs.Path.is_file')
+    def test_pathlib_path(self, is_file_mock):
+        filepath = "path/to/file.csv"
 
+        result = pathlib_path(filepath)
+
+        expected_result = filepath
+        self.assertEqual(result, expected_result)
+
+    @patch('src.interface_funcs.Path.is_file')
+    def test_pathlib_path_path_not_found(self, is_file_mock):
+        is_file_mock.return_value = False
+        filepath = "path/to/file.csv"
+
+        with self.assertRaises(FileNotFoundError) as context:
+            pathlib_path(filepath)
