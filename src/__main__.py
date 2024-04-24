@@ -3,11 +3,11 @@ import textwrap
 
 from _version import __version__
 
-from src.controllers.controller import Controller
-from src.interface.interface_text import get_help_menu
-from src.interface.interface_funcs import db_connection
-from src.interface.interface_funcs import WrongFileExtension
-from src.interface.interface_funcs import ConfigSectionIncompleteError
+from src.controller import Controller
+from src.interface_text import get_help_menu
+from src.interface_funcs import db_connection
+from src.interface_funcs import WrongFileExtension
+from src.interface_funcs import ConfigSectionIncompleteError
 
 def get_args():
     help_menu = get_help_menu()
@@ -30,11 +30,10 @@ def get_args():
         help=textwrap.dedent(help_menu['import']['sqlite_db'])
     )
     import_parser.add_argument(
-        'new_csv_files',
-        metavar='<CSV FILES>',
-        nargs='+',
+        'csv_file',
+        metavar='<CSV FILE>',
         default=None,
-        help=textwrap.dedent(help_menu['import']['new_csv_files'])
+        help=textwrap.dedent(help_menu['import']['csv_file'])
         )
     import_parser.add_argument(
         '--account-alias', '-a',
@@ -66,11 +65,10 @@ def get_args():
         help=textwrap.dedent(help_menu['import-raw']['config'])
     )
     import_raw_parser.add_argument(
-        'new_csv_files',
-        metavar='<CSV FILES>',
-        nargs='+',
+        'csv_file',
+        metavar='<CSV FILE>',
         default=None,
-        help=textwrap.dedent(help_menu['import']['new_csv_files'])
+        help=textwrap.dedent(help_menu['import']['csv_file'])
         )
     import_raw_parser.add_argument(
         '--account-alias', '-a',
