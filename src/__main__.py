@@ -96,7 +96,7 @@ def main():
 
     try:
         args = get_args()
-        start_import_process(args)
+        args.func(args)
 
     except (FileNotFoundError, ConfigSectionIncompleteError) as e:
         print(f"Error: {e}")
