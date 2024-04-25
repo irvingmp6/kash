@@ -3,7 +3,7 @@ import textwrap
 
 from _version import __version__
 
-from src.controller import Controller
+from src.controller import ImportParserController
 from src.interface_text import get_help_menu
 from src.interface_funcs import db_connection
 from src.interface_funcs import WrongFileExtension
@@ -91,7 +91,7 @@ def main():
 
     try:
         args = get_args()
-        controller = Controller(args)
+        controller = ImportParserController(args)
         controller.start_process()
 
     except (FileNotFoundError, ConfigSectionIncompleteError) as e:
