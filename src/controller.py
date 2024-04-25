@@ -6,6 +6,7 @@ from distutils.util import strtobool
 import pandas
 
 from src.interface_funcs import ConfigSectionIncompleteError
+from .user_settings import UserSettings
 from .user_settings import ImportParserUserSettings
 
 select_transaction_ids_from_bank_activity_table = "SELECT transaction_id FROM bank_activity;"
@@ -155,7 +156,7 @@ class DataBaseInterface:
         get_existing_transaction_ids() -> list: Retrieve existing transaction IDs from the database.
         insert_df_into_bank_activity_table(df: pandas.DataFrame) -> None: Insert DataFrame into the bank activity table.
     """
-    def __init__(self, user_settings: ImportParserUserSettings) -> None:
+    def __init__(self, user_settings:UserSettings) -> None:
         """
         Initialize DataBaseInterface with user settings.
 
