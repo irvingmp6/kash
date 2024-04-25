@@ -2,7 +2,7 @@ import os
 from configparser import ConfigParser
 
 
-class UserSettings:
+class ImportParserUserSettings:
     def __init__(self, args):
         self.args = args
         self.conn = self.args.sqlite_db if hasattr(self.args, 'sqlite_db') else None

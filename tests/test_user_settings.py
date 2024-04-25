@@ -3,9 +3,9 @@ from unittest.mock import MagicMock
 from unittest.mock import patch
 from unittest.mock import call
 
-from src.user_settings import UserSettings
+from src.user_settings import ImportParserUserSettings
 
-class TestUserSettings(TestCase):
+class TestImportParserUserSettings(TestCase):
 
     @patch('src.user_settings.hasattr')
     def test__init__(self, hasattr_mock):
@@ -16,7 +16,7 @@ class TestUserSettings(TestCase):
         args.account_alias = "My Bank"
         args.commit = False
     
-        user_settings = UserSettings(args)
+        user_settings = ImportParserUserSettings(args)
 
         self.assertEqual(user_settings.conn, args.sqlite_db)
         self.assertEqual(user_settings.csv_file, args.csv_file)
@@ -33,7 +33,7 @@ class TestUserSettings(TestCase):
         args.account_alias = "My Bank"
         args.commit = False
     
-        user_settings = UserSettings(args)
+        user_settings = ImportParserUserSettings(args)
 
         self.assertEqual(user_settings.conn, args.sqlite_db)
         self.assertEqual(user_settings.csv_file, args.csv_file)
@@ -47,4 +47,4 @@ class TestUserSettings(TestCase):
         args = MagicMock()
     
         with self.assertRaises(FileNotFoundError) as context:
-            UserSettings(args)
+            ImportParserUserSettings(args)

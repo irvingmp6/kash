@@ -6,7 +6,7 @@ from distutils.util import strtobool
 import pandas
 
 from src.interface_funcs import ConfigSectionIncompleteError
-from .user_settings import UserSettings
+from .user_settings import ImportParserUserSettings
 
 select_transaction_ids_from_bank_activity_table = "SELECT transaction_id FROM bank_activity;"
 select_all_from_bank_activity_table = "SELECT * FROM bank_activity;"
@@ -53,18 +53,55 @@ def format_amount(amount) -> float:
     return float(amount)
     
 
-class Controller:
+def print_bank_activity_dataframe(df:pandas.DataFrame) -> None:
+    """
+    Prints the number of transactions and displays details such as posting 
+    date, amount, description, and account alias in a formatted table.
+
+    Args:
+        df (pandas.DataFrame): DataFrame containing transaction data.
+
+    Returns:
+        None
+    """
+    new_transactions_count = len(df.index)
+    if new_transactions_count:
+        print(f"{len(df.index)} transaction(s):")
+        posting_date_header = "{: ^15}".format("POSTING DATE")
+        amount_header = "{: ^15}".format("AMOUNT")
+        description_header = "{: ^42}".format("DESCRIPTION")
+        account_alias_header = "{: ^15}".format("ACOUNT ALIAS")
+        small_column = "{:-^15}".format("")
+        large_column = "{:-^42}".format("")
+        print(f"+{small_column}+{small_column}+{large_column}+{small_column}+")
+        print(f"|{posting_date_header}|{amount_header}|{description_header}|{account_alias_header}|")
+        print(f"+{small_column}+{small_column}+{large_column}+{small_column}+")
+        for _, row in df.iterrows():
+            posting_date = row["Posting Date"]
+            posting_date = "{: <14}".format(posting_date)
+            amount = format_amount(row["Amount"])
+            amount = "{: >15}".format(amount)
+            description = row["Description"]
+            description = "{: <38}".format(description[:40])
+            account_alias = row["Account Alias"]
+            account_alias = "{: <14}".format(account_alias)
+            print(f"| {posting_date}|{amount}| {description} | {account_alias}|")
+        print(f"+{small_column}+{small_column}+{large_column}+{small_column}+")
+    else:
+        print("No transactions")
+
+class ImportParserController:
     """
     Controller class for managing transaction data processing.
 
     This class orchestrates the processing of transaction data from CSV files.
-    It interacts with the UserSettings, DataBaseInterface, and CSVHandler classes to perform various tasks.
+    It interacts with the ImportParserUserSettings, DataBaseInterface, and CSVHandler classes to perform various tasks.
 
     Args:
         args (argparse.Namespace): Namespace object containing command-line arguments.
 
     Attributes:
-        _user_settings (UserSettings): Instance of UserSettings class containing user settings and configurations.
+        _user_settings (ImportParserUserSettings): Instance of ImportParserUserSettings class containing user settings and configurations.
         csv_file (list): List of CSV file paths to be processed.
         _db_interface (DataBaseInterface): Instance of DataBaseInterface class for database interaction.
         _existing_transaction_ids (list): List of existing transaction IDs in the database.
@@ -82,7 +119,7 @@ class Controller:
         Args:
             args (argparse.Namespace): Namespace object containing command-line arguments.
         """
-        self._user_settings = UserSettings(args)
+        self._user_settings = ImportParserUserSettings(args)
         self.csv_file = self._user_settings.csv_file
         self._db_interface = DataBaseInterface(self._user_settings)
         self._existing_transaction_ids = self._db_interface.get_existing_transaction_ids()
@@ -102,46 +139,7 @@ class Controller:
         """
         new_transactions_df = self._csv_handler.get_new_settled_transactions_df(self.csv_file)
         self._db_interface.insert_df_into_bank_activity_table(new_transactions_df)
-        Controller.print_summary(new_transactions_df)
-
-    @staticmethod
-    def print_summary(df:pandas.DataFrame) -> None:
-        """
-        Prints a summary of transactions to be added based on the provided DataFrame.
-        It prints the number of new transactions and displays details such as posting 
-        date, amount, description, and account alias in a formatted table.
-
-        Args:
-            df (pandas.DataFrame): DataFrame containing transaction data.
-
-        Returns:
-            None
-        """
-        new_transactions_count = len(df.index)
-        if new_transactions_count:
-            print(f"{len(df.index)} new transaction(s):")
-            posting_date_header = "{: ^15}".format("POSTING DATE")
-            amount_header = "{: ^15}".format("AMOUNT")
-            description_header = "{: ^42}".format("DESCRIPTION")
-            account_alias_header = "{: ^15}".format("ACOUNT ALIAS")
-            small_column = "{:-^15}".format("")
-            large_column = "{:-^42}".format("")
-            print(f"+{small_column}+{small_column}+{large_column}+{small_column}+")
-            print(f"|{posting_date_header}|{amount_header}|{description_header}|{account_alias_header}|")
-            print(f"+{small_column}+{small_column}+{large_column}+{small_column}+")
-            for _, row in df.iterrows():
-                posting_date = row["Posting Date"]
-                posting_date = "{: <14}".format(posting_date)
-                amount = format_amount(row["Amount"])
-                amount = "{: >15}".format(amount)
-                description = row["Description"]
-                description = "{: <38}".format(description[:40])
-                account_alias = row["Account Alias"]
-                account_alias = "{: <14}".format(account_alias)
-                print(f"| {posting_date}|{amount}| {description} | {account_alias}|")
-            print(f"+{small_column}+{small_column}+{large_column}+{small_column}+")
-        else:
-            print("No new transactions")
+        print_bank_activity_dataframe(new_transactions_df)
 
 
 class DataBaseInterface:
@@ -149,7 +147,7 @@ class DataBaseInterface:
     Class to interface with the database.
 
     Attributes:
-        _user_settings (UserSettings): User settings object.
+        _user_settings (ImportParserUserSettings): User settings object.
         _conn: Connection to the database.
         _commit (bool): Flag indicating whether changes should be committed to the database.
 
@@ -157,12 +155,12 @@ class DataBaseInterface:
         get_existing_transaction_ids() -> list: Retrieve existing transaction IDs from the database.
         insert_df_into_bank_activity_table(df: pandas.DataFrame) -> None: Insert DataFrame into the bank activity table.
     """
-    def __init__(self, user_settings: UserSettings) -> None:
+    def __init__(self, user_settings: ImportParserUserSettings) -> None:
         """
         Initialize DataBaseInterface with user settings.
 
         Args:
-            user_settings (UserSettings): User settings object.
+            user_settings (ImportParserUserSettings): User settings object.
         """
         self._user_settings = user_settings
         self._conn = self._user_settings.conn
@@ -232,7 +230,7 @@ class CSVHandler:
     Class to handle CSV file operations.
 
     Attributes:
-        _user_settings (UserSettings): User settings object.
+        _user_settings (ImportParserUserSettings): User settings object.
         _csv_file (list): List of CSV files.
         _config (dict): Configuration settings.
         _account_alias (str): Account alias.
@@ -250,12 +248,12 @@ class CSVHandler:
         _create_dataframe_from_chase_csv(csv_file: str): Create DataFrame from a Chase CSV file.
         _add_required_columns_to_df(df: pandas.DataFrame) -> pandas.DataFrame: Add required columns to DataFrame.
     """
-    def __init__(self, user_settings:UserSettings, existing_transaction_ids:list) -> None:
+    def __init__(self, user_settings:ImportParserUserSettings, existing_transaction_ids:list) -> None:
         """
         Initialize CSVHandler with user settings and existing transaction IDs.
 
         Args:
-            user_settings (UserSettings): User settings object.
+            user_settings (ImportParserUserSettings): User settings object.
             existing_transaction_ids (list): List of existing transaction IDs.
         """
         self._user_settings = user_settings
