@@ -93,43 +93,32 @@ class TestImportParserController(TestCase):
         cls.user_settings.conn = MagicMock()
         cls.user_settings.commit = False
 
-    @patch('src.controller.CSVHandler')
     @patch('src.controller.DataBaseInterface')
     @patch('src.controller.ImportParserUserSettings')
-    def test__init__(self, ImportParserUserSettings_mock, DataBaseInterface_mock, CSVHandler_mock):
+    def test__init__(self, ImportParserUserSettings_mock, DataBaseInterface_mock):
         args = MagicMock()
         ImportParserUserSettings_mock.return_value.csv_file = self.user_settings.csv_file
 
         controller = ImportParserController(args)
 
         self.assertEqual(controller._user_settings, ImportParserUserSettings_mock.return_value)
-        self.assertEqual(controller.csv_file, self.user_settings.csv_file)
         self.assertEqual(controller._db_interface, DataBaseInterface_mock.return_value)
-        existing_transaction_ids = DataBaseInterface_mock.return_value.get_existing_transaction_ids.return_value
-        self.assertEqual(controller._existing_transaction_ids, existing_transaction_ids)
-        self.assertEqual(controller._csv_handler, CSVHandler_mock.return_value)
 
+    @patch('src.controller.CSVHandler')
+    @patch('src.controller.DataBaseInterface')
     @patch('src.controller.print_bank_activity_dataframe')
-    def test_start_process(self, print_bank_activity_dataframe_mock):
+    def test_start_process(self, print_bank_activity_dataframe_mock, DataBaseInterface_mock, CSVHandler_mock):
         self_mock = MagicMock()
-        self_mock.csv_file = self.user_settings.csv_file
-        dataframe = MagicMock()
-        self_mock._csv_handler.get_new_settled_transactions_df.return_value = dataframe
+        csv_file = self_mock._user_settings.csv_file
+        existing_transaction_ids = self_mock._db_interface.get_existing_transaction_ids.return_value
+        csv_handler = CSVHandler_mock.return_value
 
         ImportParserController.start_process(self_mock)
 
-        expected_calls = [call(self_mock.csv_file)]
-        actual_calls = self_mock._csv_handler.get_new_settled_transactions_df.call_args_list
-        self.assertEqual(expected_calls, actual_calls)
-
-        expected_calls = [call(dataframe)]
-        actual_calls = self_mock._db_interface.insert_df_into_bank_activity_table.call_args_list
-        self.assertEqual(expected_calls, actual_calls)
-
-        expected_calls = [call(dataframe)]
-        actual_calls = print_bank_activity_dataframe_mock.call_args_list
-        self.assertEqual(expected_calls, actual_calls)
-
+        csv_handler.get_new_settled_transactions_df.assert_called_once_with(csv_file)
+        new_transactions_df = csv_handler.get_new_settled_transactions_df.return_value
+        self_mock._db_interface.insert_df_into_bank_activity_table.assert_called_once_with(new_transactions_df)
+        print_bank_activity_dataframe_mock.assert_called_once_with(new_transactions_df)
 
 class TestDataBaseInterface(TestCase):
 

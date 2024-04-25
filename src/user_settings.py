@@ -6,13 +6,13 @@ class UserSettings:
     def __init__(self, cli_args):
         self.cli_args = cli_args
         self.conn = self.cli_args.sqlite_db if hasattr(self.cli_args, 'sqlite_db') else None
+        self.commit = self.cli_args.commit
 
 class ImportParserUserSettings(UserSettings):
     def __init__(self, cli_args):
         super(ImportParserUserSettings, self).__init__(cli_args)
         self.csv_file = self.cli_args.csv_file
         self.account_alias = self.cli_args.account_alias
-        self.commit = self.cli_args.commit
         self.import_config = self.get_import_config() if hasattr(self.cli_args, 'import_config') else None
 
     def get_import_config(self):
@@ -22,3 +22,7 @@ class ImportParserUserSettings(UserSettings):
         cp = ConfigParser()
         cp.read(import_config_filepath)
         return cp
+
+class GetQueryUserSettings(UserSettings):
+    def __init__(self, cli_args):
+        super(ImportParserUserSettings, self).__init__(cli_args)

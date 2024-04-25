@@ -8,6 +8,7 @@ import pandas
 from src.interface_funcs import ConfigSectionIncompleteError
 from .user_settings import UserSettings
 from .user_settings import ImportParserUserSettings
+from .user_settings import GetQueryUserSettings
 
 select_transaction_ids_from_bank_activity_table = "SELECT transaction_id FROM bank_activity;"
 select_all_from_bank_activity_table = "SELECT * FROM bank_activity;"
@@ -91,64 +92,34 @@ def print_bank_activity_dataframe(df:pandas.DataFrame) -> None:
     else:
         print("No transactions")
 
-class ImportParserController:
-    """
-    Controller class for managing transaction data processing.
-
-    This class orchestrates the processing of transaction data from CSV files.
-    It interacts with the ImportParserUserSettings, DataBaseInterface, and CSVHandler classes to perform various tasks.
-
-    Args:
-        args (argparse.Namespace): Namespace object containing command-line arguments.
-
-    Attributes:
-        _user_settings (ImportParserUserSettings): Instance of ImportParserUserSettings class containing user settings and configurations.
-        csv_file (list): List of CSV file paths to be processed.
-        _db_interface (DataBaseInterface): Instance of DataBaseInterface class for database interaction.
-        _existing_transaction_ids (list): List of existing transaction IDs in the database.
-        _csv_handler (CSVHandler): Instance of CSVHandler class for CSV file handling and data extraction.
-
-    Methods:
-        __init__(self, args:argparse.Namespace): Initializes the Controller instance.
-        start_process(self) -> None: Initiates the transaction data processing workflow.
-    """
-
-    def __init__(self, args:argparse.Namespace) -> None:
-        """
-        Initialize Controller instance.
-
-        Args:
-            args (argparse.Namespace): Namespace object containing command-line arguments.
-        """
-        self._user_settings = ImportParserUserSettings(args)
-        self.csv_file = self._user_settings.csv_file
+class Controller:
+    def __init__(self, cli_args:argparse.Namespace):
+        self._user_settings = UserSettings(cli_args)
         self._db_interface = DataBaseInterface(self._user_settings)
-        self._existing_transaction_ids = self._db_interface.get_existing_transaction_ids()
-        self._csv_handler = CSVHandler(self._user_settings, self._existing_transaction_ids)
+
+class ImportParserController(Controller):
+    def __init__(self, cli_args:argparse.Namespace) -> None:
+        super(ImportParserController, self).__init__(cli_args)
+        self._user_settings = ImportParserUserSettings(cli_args) # Override base user_settings
 
     def start_process(self) -> None:
-        """
-        Start the transaction data processing workflow.
-
-        This method performs the following steps on the CSV file passed:
-        - Extracts new settled transactions DataFrame from the CSV file using the CSVHandler.
-        - Inserts the DataFrame into the bank activity table using the DataBaseInterface.
-        - Prints a summary of the new transactions.
-
-        Returns:
-            None
-        """
-        new_transactions_df = self._csv_handler.get_new_settled_transactions_df(self.csv_file)
+        csv_file = self._user_settings.csv_file
+        existing_transaction_ids = self._db_interface.get_existing_transaction_ids()
+        csv_handler = CSVHandler(self._user_settings, existing_transaction_ids)
+        new_transactions_df = csv_handler.get_new_settled_transactions_df(csv_file)
         self._db_interface.insert_df_into_bank_activity_table(new_transactions_df)
         print_bank_activity_dataframe(new_transactions_df)
 
+class GetQueryParserController:
+    def __init__(self, cli_args:argparse.Namespace) -> None:
+        super(ImportParserController, self).__init__(cli_args)
 
 class DataBaseInterface:
     """
     Class to interface with the database.
 
     Attributes:
-        _user_settings (ImportParserUserSettings): User settings object.
+        _user_settings (UserSettings): User settings object.
         _conn: Connection to the database.
         _commit (bool): Flag indicating whether changes should be committed to the database.
 
