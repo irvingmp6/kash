@@ -4,6 +4,7 @@ import textwrap
 from _version import __version__
 
 from src.controller import ImportParserController
+from src.controller import GetQueryParserController
 from src.interface_text import get_help_menu
 from src.interface_funcs import db_connection
 from src.interface_funcs import WrongFileExtension
@@ -85,10 +86,32 @@ def get_args():
         help=textwrap.dedent(help_menu['import']['commit'])
     )
 
+    get_parser = subparsers.add_parser(
+        'get'
+        )
+    get_parser.set_defaults(func=start_get_process)
+    get_parser.add_argument(
+        'sqlite_db',
+        metavar='<SQLITE DB>',
+        type=db_connection,
+    )
+    get_parser.add_argument(
+        'queries_config',
+        metavar='<CONFIG>',
+    )
+    get_parser.add_argument(
+        'query_aliases',
+        nargs='+',
+        metavar='<CONFIG>',
+    )
     return cli.parse_args()
 
 def start_import_process(args: argparse.Namespace):
     controller = ImportParserController(args)
+    controller.start_process()
+
+def start_get_process(args: argparse.Namespace):
+    controller = GetQueryParserController(args)
     controller.start_process()
 
 def main():

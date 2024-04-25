@@ -6,7 +6,7 @@ class UserSettings:
     def __init__(self, cli_args):
         self.cli_args = cli_args
         self.conn = self.cli_args.sqlite_db if hasattr(self.cli_args, 'sqlite_db') else None
-        self.commit = self.cli_args.commit
+        self.commit = self.cli_args.commit if hasattr(self.cli_args, 'commit') else None
 
 class ImportParserUserSettings(UserSettings):
     def __init__(self, cli_args):
@@ -26,3 +26,4 @@ class ImportParserUserSettings(UserSettings):
 class GetQueryUserSettings(UserSettings):
     def __init__(self, cli_args):
         super(ImportParserUserSettings, self).__init__(cli_args)
+        self.queries_config = self.cli_args.queries_config

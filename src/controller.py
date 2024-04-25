@@ -96,6 +96,9 @@ class Controller:
     def __init__(self, cli_args:argparse.Namespace):
         self._user_settings = UserSettings(cli_args)
         self._db_interface = DataBaseInterface(self._user_settings)
+    
+    def start_process(self):
+        raise NotImplementedError
 
 class ImportParserController(Controller):
     def __init__(self, cli_args:argparse.Namespace) -> None:
@@ -110,9 +113,12 @@ class ImportParserController(Controller):
         self._db_interface.insert_df_into_bank_activity_table(new_transactions_df)
         print_bank_activity_dataframe(new_transactions_df)
 
-class GetQueryParserController:
+class GetQueryParserController(Controller):
     def __init__(self, cli_args:argparse.Namespace) -> None:
-        super(ImportParserController, self).__init__(cli_args)
+        super(GetQueryParserController, self).__init__(cli_args)
+    
+    def start_process(self):
+        print("Query Results")
 
 class DataBaseInterface:
     """

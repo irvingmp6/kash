@@ -9,7 +9,7 @@ class TestImportParserUserSettings(TestCase):
 
     @patch('src.user_settings.hasattr')
     def test__init__(self, hasattr_mock):
-        hasattr_mock.side_effect = [True, False]
+        hasattr_mock.side_effect = [True, True, False]
         cli_args = MagicMock()
         cli_args.sqlite_db = MagicMock()
         cli_args.csv_file = "/path/to/file.csv"
