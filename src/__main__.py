@@ -60,9 +60,9 @@ def get_args():
         help=textwrap.dedent(help_menu['import']['sqlite_db'])
     )
     import_raw_parser.add_argument(
-        'config',
+        'import_config',
         metavar='<CONFIG>',
-        help=textwrap.dedent(help_menu['import-raw']['config'])
+        help=textwrap.dedent(help_menu['import-raw']['import_config'])
     )
     import_raw_parser.add_argument(
         'csv_file',
@@ -83,18 +83,6 @@ def get_args():
         help=textwrap.dedent(help_menu['import']['commit'])
     )
 
-    # SQL Subparser
-    # sql_parser = subparsers.add_parser('sql')
-    # sql_parser.add_argument(
-    #     'config'
-    #     metavar='<CONFIG>',
-    #     type=pathlib_config_path,
-    # )
-    # sql_parser.add_argument(
-    #     'key'
-    #     metavar='<KEY>'
-    # )
-    # import pdb; pdb.set_trace()
     return cli.parse_args()
 
 

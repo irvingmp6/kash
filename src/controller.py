@@ -260,7 +260,7 @@ class CSVHandler:
         """
         self._user_settings = user_settings
         self._csv_file = self._user_settings.csv_file
-        self._config = self._user_settings.config
+        self._import_config = self._user_settings.import_config
         self._account_alias = self._user_settings.account_alias
         self._chase_column_config_name_map = self._get_chase_column_config_name_map()
         self._chase_column_names = self._get_chase_column_names()
@@ -305,7 +305,7 @@ class CSVHandler:
             pandas.DataFrame: DataFrame of new settled transactions.
         """
         # Determine if a config was provided
-        if self._config:
+        if self._import_config:
             # Create DataFrame from a foreign CSV file
             csv_trans_df = self._create_dataframe_from_foreign_csv(csv_file)
         else:
@@ -330,7 +330,7 @@ class CSVHandler:
         """
         try:
             # Extract whether the CSV file has a header from configuration
-            config_value = self._config["HEADER"].get("has_header")
+            config_value = self._import_config["HEADER"].get("has_header")
             csv_has_header_row = strtobool(config_value.strip())
         except (KeyError, AttributeError, ValueError) as e:
             # Handle missing or incorrect configuration for the has_
@@ -392,7 +392,7 @@ class CSVHandler:
             # Loop through the expected keys in the GENERAL section of the configuration
             for key in self._chase_column_config_name_map.keys():
                 # Get the value associated with the key and strip any leading or trailing whitespace
-                value = self._config["GENERAL"][key].strip()
+                value = self._import_config["GENERAL"][key].strip()
                 # Check if the value is not empty
                 if value:
                     # Convert the value to an integer, representing the index of the original DataFrame

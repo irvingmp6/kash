@@ -10,7 +10,7 @@ def get_help_menu() -> dict:
             'commit': """Commits changes to database based on analysis""",
         },
         'import-raw': {
-            'config': """Config file containing mapping definitions"""
+            'import_config': """Config file containing mapping definitions"""
         },
         # 'sql':{
         #     'keys': """List of key that execute SQL queries"""
