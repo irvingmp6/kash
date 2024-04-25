@@ -23,6 +23,7 @@ def get_args():
         'import',
         help=help_menu['import']['desc']
     )
+    import_parser.set_defaults(func=start_import_process)
     import_parser.add_argument(
         'sqlite_db',
         metavar='<SQLITE DB>',
@@ -53,6 +54,7 @@ def get_args():
         'import-raw',
         help=help_menu['import']['desc']
     )
+    import_raw_parser.set_defaults(func=start_import_process)
     import_raw_parser.add_argument(
         'sqlite_db',
         metavar='<SQLITE DB>',
@@ -85,14 +87,16 @@ def get_args():
 
     return cli.parse_args()
 
+def start_import_process(args: argparse.Namespace):
+    controller = ImportParserController(args)
+    controller.start_process()
 
 def main():
     args = None
 
     try:
         args = get_args()
-        controller = ImportParserController(args)
-        controller.start_process()
+        start_import_process(args)
 
     except (FileNotFoundError, ConfigSectionIncompleteError) as e:
         print(f"Error: {e}")
