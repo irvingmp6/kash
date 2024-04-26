@@ -7,8 +7,11 @@ from src.controller import ImportParserController
 from src.controller import GetQueryParserController
 from src.interface_text import get_help_menu
 from src.interface_funcs import db_connection
-from src.interface_funcs import WrongFileExtension
 from src.interface_funcs import ConfigSectionIncompleteError
+from src.interface_funcs import DuplicateAliasError
+from src.interface_funcs import QueryNotDefinedError
+from src.interface_funcs import BadQueryStructureError
+from src.interface_funcs import UnknownAliasError
 
 def get_args():
     help_menu = get_help_menu()
@@ -100,7 +103,7 @@ def get_args():
         metavar='<CONFIG>',
     )
     get_parser.add_argument(
-        'query_aliases',
+        'query_calls',
         nargs='+',
         metavar='<CONFIG>',
     )
@@ -121,7 +124,9 @@ def main():
         args = get_args()
         args.func(args)
 
-    except (FileNotFoundError, ConfigSectionIncompleteError) as e:
+    except (FileNotFoundError, ConfigSectionIncompleteError,
+            DuplicateAliasError, QueryNotDefinedError,
+            BadQueryStructureError, UnknownAliasError) as e:
         print(f"Error: {e}")
 
     finally:

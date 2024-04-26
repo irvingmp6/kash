@@ -108,3 +108,15 @@ class SQLOperationalError(Exception):
 class ConfigSectionIncompleteError(Exception):
     """Exception raised when a configuration section is incomplete."""
     pass
+
+class DuplicateAliasError(Exception):
+    pass
+
+class QueryNotDefinedError(Exception):
+    pass
+
+class BadQueryStructureError(Exception):
+    pass
+
+class UnknownAliasError(Exception):
+    pass

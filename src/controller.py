@@ -6,6 +6,9 @@ from distutils.util import strtobool
 import pandas
 
 from src.interface_funcs import ConfigSectionIncompleteError
+from src.interface_funcs import DuplicateAliasError
+from src.interface_funcs import BadQueryStructureError
+from src.interface_funcs import UnknownAliasError
 from .user_settings import UserSettings
 from .user_settings import ImportParserUserSettings
 from .user_settings import GetQueryUserSettings
@@ -116,9 +119,55 @@ class ImportParserController(Controller):
 class GetQueryParserController(Controller):
     def __init__(self, cli_args:argparse.Namespace) -> None:
         super(GetQueryParserController, self).__init__(cli_args)
-    
+        self._user_settings = GetQueryUserSettings(cli_args)
+        self.queries_config = self._user_settings.queries_config
+        self.call_query_map = self._create_query_alias_map()
+        self.query_calls = self._get_query_calls()
+
     def start_process(self):
-        print("Query Results")
+        try:
+            max_rows_to_display = self.queries_config.get("GENERAL", "max_rows_to_display", fallback=None)
+            max_rows_to_display = int(max_rows_to_display)
+        except ValueError:
+            raise ValueError(f"{max_rows_to_display} is not an acceptable value in [GENERAL] max_rows_to_display")
+        pandas.set_option('display.max_rows', max_rows_to_display)
+        for query_call in self.query_calls:
+            df = pandas.DataFrame(self._db_interface.execute_query(query_call))
+            print()
+            for row_idx, row in df.head(max_rows_to_display).iterrows():
+                print("+"+"+".join(["-"*len("{: >15} ".format(str(row[col_idx])[:30])) for col_idx in range(len(row))]) + "+")
+                formatted_columns = []
+                for col_idx in range(len(row)):
+                    formatted_value = "{: >15} ".format(str(row[col_idx])[:30])
+                    formatted_columns.append(formatted_value)
+                formatted_output = "|" + "|".join(formatted_columns) + "|"
+                print(formatted_output)
+            print("+".join(["-"*len("{: >15} ".format(str(row[col_idx])[:30])) for col_idx in range(len(row))]) + "-+")
+    def _get_query_calls(self):
+        return [self._validate_query(query_call) for query_call in self._user_settings.query_calls]
+
+    def _validate_query(self, query_call):
+        try:
+            query = self.call_query_map[query_call]
+            if "UPDATE" in query.upper() or "DELETE" in query.upper() or "DROP" in query.upper():
+                raise BadQueryStructureError(f"The query contains illegal words: {query}")
+        except KeyError:
+            raise UnknownAliasError(f"{query_call}: alias does not exist")
+        return query.strip('"""')
+
+    def _create_query_alias_map(self):
+        query_alias_map = {}
+        for key in self.queries_config["ALIASES"]:
+            for value in self.queries_config["ALIASES"][key].strip().split(","):
+                alias = value.strip()
+                if alias not in query_alias_map.keys():
+                    try:
+                        query_alias_map[alias] = self.queries_config.get("QUERIES", key, raw=True)
+                    except KeyError:
+                        raise KeyError(f"Alias defined to a key that doesn't exist in QUERIES in: {self._user_settings.queries_config_path}")
+                else:
+                    raise DuplicateAliasError(f"{alias}: Alias is used multiple times in [ALIASES]: {self._user_settings.queries_config_path}")
+        return query_alias_map
 
 class DataBaseInterface:
     """
@@ -202,6 +251,8 @@ class DataBaseInterface:
         if self._commit:
             self._conn.commit()
 
+    def execute_query(self, query):
+        return self._conn.execute(query).fetchall()
 
 class CSVHandler:
     """
