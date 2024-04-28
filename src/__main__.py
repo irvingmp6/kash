@@ -13,7 +13,7 @@ from src.interface_funcs import QueryNotDefinedError
 from src.interface_funcs import BadQueryStructureError
 from src.interface_funcs import UnknownAliasError
 
-def get_args():
+def get_cli_args():
     help_menu = get_help_menu()
     cli = argparse.ArgumentParser(
         prog='kash',
@@ -105,24 +105,29 @@ def get_args():
     get_parser.add_argument(
         'query_calls',
         nargs='+',
-        metavar='<CONFIG>',
+        metavar='<QUERY ALIAS>',
     )
+
     return cli.parse_args()
 
-def start_import_process(args: argparse.Namespace):
-    controller = ImportParserController(args)
+def start_import_process(cli_args: argparse.Namespace):
+    controller = ImportParserController(cli_args)
     controller.start_process()
 
-def start_get_process(args: argparse.Namespace):
-    controller = GetQueryParserController(args)
+def start_get_process(cli_args: argparse.Namespace):
+    controller = GetQueryParserController(cli_args)
     controller.start_process()
+
 
 def main():
-    args = None
+    cli_args = None
 
     try:
-        args = get_args()
-        args.func(args)
+        cli_args = get_cli_args()
+        if hasattr(cli_args, 'func'):
+            cli_args.func(cli_args)
+        else:
+            print('Not enough arguments passed. Fore usage details run "kash --help"')
 
     except (FileNotFoundError, ConfigSectionIncompleteError,
             DuplicateAliasError, QueryNotDefinedError,
@@ -130,8 +135,8 @@ def main():
         print(f"Error: {e}")
 
     finally:
-        if args:
-            args.sqlite_db.close()
+        if hasattr(cli_args, "sqlite_db"):
+            cli_args.sqlite_db.close()
 
 if __name__ == "__main__":
     main()

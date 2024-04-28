@@ -29,4 +29,3 @@ class GetQueryUserSettings(UserSettings):
         self.queries_config_path = self.cli_args.queries_config
         self.queries_config = self.get_config_object(self.queries_config_path)
         self.query_calls = self.cli_args.query_calls
-

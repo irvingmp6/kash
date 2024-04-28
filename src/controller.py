@@ -1,6 +1,7 @@
 import hashlib
 import argparse
 from datetime import datetime
+from datetime import timedelta
 from distutils.util import strtobool
 
 import pandas
@@ -119,10 +120,10 @@ class ImportParserController(Controller):
 class GetQueryParserController(Controller):
     def __init__(self, cli_args:argparse.Namespace) -> None:
         super(GetQueryParserController, self).__init__(cli_args)
-        self._user_settings = GetQueryUserSettings(cli_args)
+        self._user_settings = GetQueryUserSettings(cli_args) # Override base user_settings
         self.queries_config = self._user_settings.queries_config
         self.call_query_map = self._create_query_alias_map()
-        self.query_calls = self._get_query_calls()
+        self.queries = self._get_queries()
 
     def start_process(self):
         try:
@@ -131,9 +132,9 @@ class GetQueryParserController(Controller):
         except ValueError:
             raise ValueError(f"{max_rows_to_display} is not an acceptable value in [GENERAL] max_rows_to_display")
         pandas.set_option('display.max_rows', max_rows_to_display)
-        for query_call in self.query_calls:
-            df = pandas.DataFrame(self._db_interface.execute_query(query_call))
-            print()
+        for query_call, query in self.queries:
+            df = pandas.DataFrame(self._db_interface.execute_query(query))
+            print(f'\n"{query_call}" results:')
             for row_idx, row in df.head(max_rows_to_display).iterrows():
                 print("+"+"+".join(["-"*len("{: >15} ".format(str(row[col_idx])[:30])) for col_idx in range(len(row))]) + "+")
                 formatted_columns = []
@@ -143,16 +144,17 @@ class GetQueryParserController(Controller):
                 formatted_output = "|" + "|".join(formatted_columns) + "|"
                 print(formatted_output)
             print("+".join(["-"*len("{: >15} ".format(str(row[col_idx])[:30])) for col_idx in range(len(row))]) + "-+")
-    def _get_query_calls(self):
-        return [self._validate_query(query_call) for query_call in self._user_settings.query_calls]
 
-    def _validate_query(self, query_call):
+    def _get_queries(self):
+        return [(query_call, self._validate_query(query_call)) for query_call in self._user_settings.query_calls]
+
+    def _validate_query(self, query):
         try:
-            query = self.call_query_map[query_call]
+            query = self.call_query_map[query]
             if "UPDATE" in query.upper() or "DELETE" in query.upper() or "DROP" in query.upper():
                 raise BadQueryStructureError(f"The query contains illegal words: {query}")
         except KeyError:
-            raise UnknownAliasError(f"{query_call}: alias does not exist")
+            raise UnknownAliasError(f"{query}: alias does not exist")
         return query.strip('"""')
 
     def _create_query_alias_map(self):
@@ -168,6 +170,7 @@ class GetQueryParserController(Controller):
                 else:
                     raise DuplicateAliasError(f"{alias}: Alias is used multiple times in [ALIASES]: {self._user_settings.queries_config_path}")
         return query_alias_map
+
 
 class DataBaseInterface:
     """
@@ -229,15 +232,13 @@ class DataBaseInterface:
             type_ = row["Type"]
             balance = row["Balance"]
             check_or_slip_num = row["Check or Slip #"]
-
-            # Reconciled is used for tracking purposes. 
-            # 'N' means you have NOT confirmed this transaction against your expected credits and purchases. 
-            # 'Y' means you have confirmed this credit/purchase against your expected credits and purchases.
-            # Ideally, all your transactions should be 'Y' at the end of your personal finance analysis.
-            # Setting it to 'N' by default allows you the opportunity to analyze your historical spending and income.
-            # Currently, this program does not have a way to convert this flag to 'Y'.
-            # You'll have to manually change the flag in the database.
-            reconciled = 'N'
+            reconciled = 'N' # Reconciled is used for tracking purposes.
+            # 'N' means the system has NOT confirmed this transaction against expected transaction. 
+            # 'Y' means the system has confirmed this transaction against expected transaction.
+            # Setting it to 'N' by default allows the opportunity to programatically analyze cashflow.
+            # Plans to have kash automatate reconciliation are in the works.
+            # This flag was added early so that the bank_activity table does not have to be 
+            # modified in later versions when this reconciliation feature is completed
 
             # Create a tuple of values to be inserted into the database
             values = (account_alias, transaction_id, details, formatted_posting_date,
@@ -251,8 +252,12 @@ class DataBaseInterface:
         if self._commit:
             self._conn.commit()
 
-    def execute_query(self, query):
+    def execute_query(self, query:str,args:list=None):
+        if args:
+            print(query)
+            return self._conn.execute(query, args).fetchall()
         return self._conn.execute(query).fetchall()
+
 
 class CSVHandler:
     """
