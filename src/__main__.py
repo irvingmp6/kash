@@ -3,18 +3,27 @@ import textwrap
 
 from _version import __version__
 
-from src.controller import ImportParserController
-from src.controller import GetQueryParserController
+from src.controller import ImportParserController, GetQueryParserController
 from src.interface_text import get_help_menu
-from src.interface_funcs import db_connection
-from src.interface_funcs import ConfigSectionIncompleteError
-from src.interface_funcs import DuplicateAliasError
-from src.interface_funcs import QueryNotDefinedError
-from src.interface_funcs import BadQueryStructureError
-from src.interface_funcs import UnknownAliasError
+from src.interface_funcs import (
+    db_connection,
+    ConfigSectionIncompleteError,
+    DuplicateAliasError,
+    QueryNotDefinedError,
+    BadQueryStructureError,
+    UnknownAliasError,
+)
 
-def get_cli_args():
+def get_cli_args() -> argparse.Namespace:
+    """
+    Parse command-line arguments using argparse.
+
+    Returns:
+        argparse.Namespace: Parsed command-line arguments.
+    """
     help_menu = get_help_menu()
+
+    # Create CLI Parser
     cli = argparse.ArgumentParser(
         prog='kash',
         formatter_class=argparse.RawDescriptionHelpFormatter,
@@ -22,7 +31,7 @@ def get_cli_args():
     )
     subparsers = cli.add_subparsers(help=help_menu['subparsers'])
 
-    # Import Subparser
+    # Create Import Subparser
     import_parser = subparsers.add_parser(
         'import',
         help=help_menu['import']['desc']
@@ -39,7 +48,7 @@ def get_cli_args():
         metavar='<CSV FILE>',
         default=None,
         help=textwrap.dedent(help_menu['import']['csv_file'])
-        )
+    )
     import_parser.add_argument(
         '--account-alias', '-a',
         type=str,
@@ -53,7 +62,7 @@ def get_cli_args():
         help=textwrap.dedent(help_menu['import']['commit'])
     )
 
-    # Import Raw Subparser
+    # Create Import Raw Subparser
     import_raw_parser = subparsers.add_parser(
         'import-raw',
         help=help_menu['import']['desc']
@@ -75,7 +84,7 @@ def get_cli_args():
         metavar='<CSV FILE>',
         default=None,
         help=textwrap.dedent(help_menu['import']['csv_file'])
-        )
+    )
     import_raw_parser.add_argument(
         '--account-alias', '-a',
         type=str,
@@ -89,9 +98,8 @@ def get_cli_args():
         help=textwrap.dedent(help_menu['import']['commit'])
     )
 
-    get_parser = subparsers.add_parser(
-        'get'
-        )
+    # Create Get Subparser
+    get_parser = subparsers.add_parser('get')
     get_parser.set_defaults(func=start_get_process)
     get_parser.add_argument(
         'sqlite_db',
@@ -110,25 +118,49 @@ def get_cli_args():
 
     return cli.parse_args()
 
-def start_import_process(cli_args: argparse.Namespace):
+def start_import_process(cli_args: argparse.Namespace) -> None:
+    """
+    Start the import process based on CLI arguments.
+
+    Args:
+        cli_args (argparse.Namespace): Parsed command-line arguments.
+    """
     controller = ImportParserController(cli_args)
     controller.start_process()
 
-def start_get_process(cli_args: argparse.Namespace):
+def start_get_process(cli_args: argparse.Namespace) -> None:
+    """
+    Start the query process based on CLI arguments.
+
+    Args:
+        cli_args (argparse.Namespace): Parsed command-line arguments.
+    """
     controller = GetQueryParserController(cli_args)
     controller.start_process()
 
+def main() -> None:
+    """
+    Main function to execute the command-line interface.
 
-def main():
+    Calls one of two functions:
+        - start_import_process()
+        - start_get_process()
+    
+    Handles custom raised exceptions by printing the error message with helpful troubleshooting tips instead of a stack trace.
+    However, uncaught exceptions will be raised, allowing for easier bug tracking.
+    """
     cli_args = None
 
     try:
         cli_args = get_cli_args()
         if hasattr(cli_args, 'func'):
+
+            # Call mapped function
             cli_args.func(cli_args)
         else:
-            print('Not enough arguments passed. Fore usage details run "kash --help"')
+            print('Not enough arguments passed. For usage details, run "kash --help"')
 
+    # Handle custom errors
     except (FileNotFoundError, ConfigSectionIncompleteError,
             DuplicateAliasError, QueryNotDefinedError,
             BadQueryStructureError, UnknownAliasError) as e:
