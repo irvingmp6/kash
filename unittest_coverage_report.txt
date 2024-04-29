@@ -1,13 +1,12 @@
 Name                            Stmts   Miss  Cover
 ---------------------------------------------------
 src\__init__.py                     0      0   100%
-src\controller.py                 156      0   100%
+src\controller.py                 164      1    99%
 src\interface_funcs.py             39      0   100%
-src\user_settings.py               17      0   100%
+src\user_settings.py               23      1    96%
 tests\__init__.py                   0      0   100%
-tests\test__main__.py               0      0   100%
-tests\test_controller.py          341      0   100%
+tests\test_controller.py          334      0   100%
 tests\test_interface_funcs.py      81      0   100%
-tests\test_user_settings.py        41      0   100%
+tests\test_user_settings.py        40      0   100%
 ---------------------------------------------------
-TOTAL                             675      0   100%
+TOTAL                             681      2    99%

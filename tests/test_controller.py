@@ -12,7 +12,8 @@ from pandas.testing import assert_frame_equal
 
 from src.controller import format_date
 from src.controller import format_amount
-from src.controller import Controller
+from src.controller import print_bank_activity_dataframe
+from src.controller import ImportParserController
 from src.controller import DataBaseInterface
 from src.controller import CSVHandler
 from src.interface_funcs import ConfigSectionIncompleteError
@@ -28,86 +29,8 @@ class TestFormattingFunctions(TestCase):
         self.assertEqual(format_amount(75), 75.00)
         self.assertEqual(format_amount(-25.50), -25.50)
 
-
-class TestController(TestCase):
-
-    @classmethod
-    def setUpClass(cls):
-        cls.user_settings = MagicMock()
-        cls.user_settings.csv_file = "Chase_bank_activity_1.CSV"
-        cls.csv_file = cls.user_settings.csv_file
-        cls.user_settings.conn = MagicMock()
-        cls.user_settings.commit = False
-
-    @patch('src.controller.CSVHandler')
-    @patch('src.controller.DataBaseInterface')
-    @patch('src.controller.UserSettings')
-    def test__init__(self, UserSettings_mock, DataBaseInterface_mock, CSVHandler_mock):
-        args = MagicMock()
-        UserSettings_mock.return_value.csv_file = self.user_settings.csv_file
-
-        controller = Controller(args)
-
-        self.assertEqual(controller._user_settings, UserSettings_mock.return_value)
-        self.assertEqual(controller.csv_file, self.user_settings.csv_file)
-        self.assertEqual(controller._db_interface, DataBaseInterface_mock.return_value)
-        existing_transaction_ids = DataBaseInterface_mock.return_value.get_existing_transaction_ids.return_value
-        self.assertEqual(controller._existing_transaction_ids, existing_transaction_ids)
-        self.assertEqual(controller._csv_handler, CSVHandler_mock.return_value)
-
-    @patch('src.controller.Controller.print_summary')
-    def test_start_process(self, print_summary_mock):
-        self_mock = MagicMock()
-        self_mock.csv_file = self.user_settings.csv_file
-        dataframe = MagicMock()
-        self_mock._csv_handler.get_new_settled_transactions_df.return_value = dataframe
-
-        Controller.start_process(self_mock)
-
-        expected_calls = [call(self_mock.csv_file)]
-        actual_calls = self_mock._csv_handler.get_new_settled_transactions_df.call_args_list
-        self.assertEqual(expected_calls, actual_calls)
-
-        expected_calls = [call(dataframe)]
-        actual_calls = self_mock._db_interface.insert_df_into_bank_activity_table.call_args_list
-        self.assertEqual(expected_calls, actual_calls)
-
-        expected_calls = [call(dataframe)]
-        actual_calls = print_summary_mock.call_args_list
-        self.assertEqual(expected_calls, actual_calls)
-
-
     @patch('src.controller.print')
-    def test__print_summary_df_with_rows(self, print_mock):
-        df_data = {
-            "Details": ["DEBIT"],
-            "Posting Date": ["2/01/2024"],
-            "Description": ["SPAM BAR HAM"],
-            "Amount": ["-7.77"],
-            "Type": ["DEBIT_CARD"],
-            "Balance": ["6.66"],
-            "Check or Slip #": [""],
-            "Extra 1": [""],
-            "Account Alias": ["Chase Bank"],
-            "Transaction ID": ["DEF234"]
-        }
-        df = pd.DataFrame(data=df_data)
-
-        Controller.print_summary(df)
-
-        expected_calls = [
-            call('1 new transaction(s):'),
-            call('+---------------+---------------+------------------------------------------+---------------+'),
-            call('| POSTING DATE  |    AMOUNT     |               DESCRIPTION                | ACOUNT ALIAS  |'),
-            call('+---------------+---------------+------------------------------------------+---------------+'),
-            call('| 2/01/2024     |          -7.77| SPAM BAR HAM                           | Chase Bank    |'),
-            call('+---------------+---------------+------------------------------------------+---------------+')
-        ]
-
-        self.assertEqual(print_mock.call_args_list, expected_calls)
-
-    @patch('src.controller.print')
-    def test__print_summary_df_with_no_rows(self, print_mock):
+    def test_print_bank_activity_dataframe_df_with_no_rows(self, print_mock):
         df_data = {
             "Details": [],
             "Posting Date": [],
@@ -122,14 +45,80 @@ class TestController(TestCase):
         }
         df = pd.DataFrame(data=df_data)
 
-        Controller.print_summary(df)
+        print_bank_activity_dataframe(df)
 
         expected_calls = [
-            call('No new transactions')
+            call('No transactions')
         ]
 
         self.assertEqual(print_mock.call_args_list, expected_calls)
 
+    @patch('src.controller.print')
+    def test__print_bank_activity_dataframe_df_with_rows(self, print_mock):
+        df_data = {
+            "Details": ["DEBIT"],
+            "Posting Date": ["2/01/2024"],
+            "Description": ["SPAM BAR HAM"],
+            "Amount": ["-7.77"],
+            "Type": ["DEBIT_CARD"],
+            "Balance": ["6.66"],
+            "Check or Slip #": [""],
+            "Extra 1": [""],
+            "Account Alias": ["Chase Bank"],
+            "Transaction ID": ["DEF234"]
+        }
+        df = pd.DataFrame(data=df_data)
+
+        print_bank_activity_dataframe(df)
+
+        expected_calls = [
+            call('1 transaction(s):'),
+            call('+---------------+---------------+------------------------------------------+---------------+'),
+            call('| POSTING DATE  |    AMOUNT     |               DESCRIPTION                | ACOUNT ALIAS  |'),
+            call('+---------------+---------------+------------------------------------------+---------------+'),
+            call('| 2/01/2024     |          -7.77| SPAM BAR HAM                           | Chase Bank    |'),
+            call('+---------------+---------------+------------------------------------------+---------------+')
+        ]
+
+        self.assertEqual(print_mock.call_args_list, expected_calls)
+
+
+class TestImportParserController(TestCase):
+
+    @classmethod
+    def setUpClass(cls):
+        cls.user_settings = MagicMock()
+        cls.user_settings.csv_file = "Chase_bank_activity_1.CSV"
+        cls.csv_file = cls.user_settings.csv_file
+        cls.user_settings.conn = MagicMock()
+        cls.user_settings.commit = False
+
+    @patch('src.controller.DataBaseInterface')
+    @patch('src.controller.ImportParserUserSettings')
+    def test__init__(self, ImportParserUserSettings_mock, DataBaseInterface_mock):
+        args = MagicMock()
+        ImportParserUserSettings_mock.return_value.csv_file = self.user_settings.csv_file
+
+        controller = ImportParserController(args)
+
+        self.assertEqual(controller._user_settings, ImportParserUserSettings_mock.return_value)
+        self.assertEqual(controller._db_interface, DataBaseInterface_mock.return_value)
+
+    @patch('src.controller.CSVHandler')
+    @patch('src.controller.DataBaseInterface')
+    @patch('src.controller.print_bank_activity_dataframe')
+    def test_start_process(self, print_bank_activity_dataframe_mock, DataBaseInterface_mock, CSVHandler_mock):
+        self_mock = MagicMock()
+        csv_file = self_mock._user_settings.csv_file
+        existing_transaction_ids = self_mock._db_interface.get_existing_transaction_ids.return_value
+        csv_handler = CSVHandler_mock.return_value
+
+        ImportParserController.start_process(self_mock)
+
+        csv_handler.get_new_settled_transactions_df.assert_called_once_with(csv_file)
+        new_transactions_df = csv_handler.get_new_settled_transactions_df.return_value
+        self_mock._db_interface.insert_df_into_bank_activity_table.assert_called_once_with(new_transactions_df)
+        print_bank_activity_dataframe_mock.assert_called_once_with(new_transactions_df)
 
 class TestDataBaseInterface(TestCase):
 
@@ -222,13 +211,13 @@ class TestCSVHandlerHappyPathChaseCSV(TestCase):
         cls.df_with_no_rows = cls.processed_df.head(0)
 
     def test__init__(self):
-        UserSettings_mock = MagicMock()
+        ImportParserUserSettings_mock = MagicMock()
         existing_transaction_ids = ["ABC123","DEF234","GHI345"]
 
-        csv_handler = CSVHandler(UserSettings_mock, existing_transaction_ids)
-        self.assertEqual(csv_handler._user_settings, UserSettings_mock)
-        self.assertEqual(csv_handler._csv_file, UserSettings_mock.csv_file)
-        self.assertEqual(csv_handler._config, UserSettings_mock.config)
+        csv_handler = CSVHandler(ImportParserUserSettings_mock, existing_transaction_ids)
+        self.assertEqual(csv_handler._user_settings, ImportParserUserSettings_mock)
+        self.assertEqual(csv_handler._csv_file, ImportParserUserSettings_mock.csv_file)
+        self.assertEqual(csv_handler._import_config, ImportParserUserSettings_mock.import_config)
         chase_column_names = ["Details", "Posting Date", "Description", 
                               "Amount", "Type", "Balance", "Check or Slip #", 
                               "Extra 1"]
@@ -242,7 +231,7 @@ class TestCSVHandlerHappyPathChaseCSV(TestCase):
                                     _create_dataframe_from_chase_csv_mock):
         self_mock = MagicMock()
         self_mock._account_alias = "Chase Bank"
-        self_mock._config = None
+        self_mock._import_config = None
         csv_file = "Chase_bank_activity.csv"
         chase_csv_data = {
             "Details": ["DEBIT","DEBIT","DEBIT","DEBIT"],
@@ -318,18 +307,18 @@ class TestCSVHandlerHappyPathNonChaseCSV(TestCase):
         cls.conn = MagicMock()
         cls.csv_file = ["Non_Chase_bank_activity_1.csv"]
         cls.commit = False
-        cls.config = ConfigParser()
-        cls.config.add_section('GENERAL')
-        cls.config.set('GENERAL', 'details', '')
-        cls.config.set('GENERAL', 'posting_date', ' 0 ')
-        cls.config.set('GENERAL', 'description', ' 4 ')
-        cls.config.set('GENERAL', 'amount', ' 1 ')
-        cls.config.set('GENERAL', 'type', '2')
-        cls.config.set('GENERAL', 'balance', '')
-        cls.config.set('GENERAL', 'check_or_slip_number', '')
-        cls.config.set('GENERAL', 'extra_1', '')
-        cls.config.add_section('HEADER')
-        cls.config.set('HEADER', 'has_header', ' True ')
+        cls.import_config = ConfigParser()
+        cls.import_config.add_section('GENERAL')
+        cls.import_config.set('GENERAL', 'details', '')
+        cls.import_config.set('GENERAL', 'posting_date', ' 0 ')
+        cls.import_config.set('GENERAL', 'description', ' 4 ')
+        cls.import_config.set('GENERAL', 'amount', ' 1 ')
+        cls.import_config.set('GENERAL', 'type', '2')
+        cls.import_config.set('GENERAL', 'balance', '')
+        cls.import_config.set('GENERAL', 'check_or_slip_number', '')
+        cls.import_config.set('GENERAL', 'extra_1', '')
+        cls.import_config.add_section('HEADER')
+        cls.import_config.set('HEADER', 'has_header', ' True ')
         cls.non_chase_csv_file_w_header_bytes = (
             b"date posted,transaction amount,type,BAR,transaction desc,BAZ\n"
             b"1/25/2024,-30,POS,,7-11 #5486792135 PURCHASE                             1/24/2024,\n"
@@ -383,7 +372,7 @@ class TestCSVHandlerHappyPathNonChaseCSV(TestCase):
                                     _create_dataframe_from_chase_csv):
         self_mock = MagicMock()
         self_mock._account_alias = "Non Chase Bank"
-        self_mock._config = self.config
+        self_mock._import_config = self.import_config
         csv_file = "non_Chase_bank_activity.csv"
         converted_chase_csv_data = {
             "Details": ["DEBIT","DEBIT","DEBIT","DEBIT"],
@@ -425,7 +414,7 @@ class TestCSVHandlerHappyPathNonChaseCSV(TestCase):
     def test__create_dataframe_from_foreign_csv_with_header_row(self):
         csv_file = BytesIO(self.non_chase_csv_file_w_header_bytes)
         self_mock = MagicMock()
-        self_mock._config = self.config
+        self_mock._import_config = self.import_config
         self_mock._convert_dataframe_to_chase_format.return_value = self.unprocessed_df
         self_mock._add_required_columns_to_df.return_value = self.processed_df
         converters = self_mock._get_converters.return_value = {i: str for i in range(5)}
@@ -443,8 +432,8 @@ class TestCSVHandlerHappyPathNonChaseCSV(TestCase):
     def test__create_dataframe_from_foreign_csv_with_no_header_row(self):
         csv_file = BytesIO(self.non_chase_csv_file_wo_header_bytes)
         self_mock = MagicMock()
-        self_mock._config = self.config
-        self.config["HEADER"]["has_header"] = " False "
+        self_mock._import_config = self.import_config
+        self.import_config["HEADER"]["has_header"] = " False "
         self_mock._convert_dataframe_to_chase_format.return_value = self.unprocessed_df
         self_mock._add_required_columns_to_df.return_value = self.processed_df
         converters = self_mock._get_converters.return_value = {i: str for i in range(5)}
@@ -471,7 +460,7 @@ class TestCSVHandlerHappyPathNonChaseCSV(TestCase):
 
     def test__convert_dataframe_to_chase_format(self):
         self_mock = MagicMock()
-        self_mock._config = self.config
+        self_mock._import_config = self.import_config
         self_mock._chase_column_config_name_map = {
             "details" : "Details",
             "posting_date" : "Posting Date",
@@ -506,9 +495,9 @@ class TesatCSVHandlerBadConfigHeaderSectionMissingKey(TestCase):
 
     def test__create_dataframe_from_foreign_csv_with_header_row_bad_HEADER_config(self):
         self_mock = MagicMock()
-        self_mock._config = ConfigParser()
-        self_mock._config.add_section('HEADER')
-        self_mock._config.set('HEADER', 'has_header', 'FOO')
+        self_mock._import_config = ConfigParser()
+        self_mock._import_config.add_section('HEADER')
+        self_mock._import_config.set('HEADER', 'has_header', 'FOO')
         csv_file = BytesIO(self.non_chase_csv_file_w_header_bytes)
 
         with self.assertRaises(ConfigSectionIncompleteError) as context:
@@ -518,8 +507,8 @@ class TesatCSVHandlerBadConfigHeaderSectionMissingKey(TestCase):
 
     def test__create_dataframe_from_foreign_csv_with_header_row_missing_HEADER_config(self):
         self_mock = MagicMock()
-        self_mock._config = ConfigParser()
-        self_mock._config.add_section('HEADER')
+        self_mock._import_config = ConfigParser()
+        self_mock._import_config.add_section('HEADER')
         csv_file = BytesIO(self.non_chase_csv_file_w_header_bytes)
 
         with self.assertRaises(ConfigSectionIncompleteError) as context:
@@ -529,7 +518,7 @@ class TesatCSVHandlerBadConfigHeaderSectionMissingKey(TestCase):
 
     def test__create_dataframe_from_foreign_csv_with_header_row_missing_HEADER_section(self):
         self_mock = MagicMock()
-        self_mock._config = ConfigParser()
+        self_mock._import_config = ConfigParser()
         csv_file = BytesIO(self.non_chase_csv_file_w_header_bytes)
 
         with self.assertRaises(ConfigSectionIncompleteError) as context:
@@ -550,7 +539,7 @@ class TesatCSVHandlerBadConfigGeneralSectionMissingKey(TestCase):
 
     def test__convert_dataframe_to_chase_format_missing_GENERAL_section(self):
         self_mock = MagicMock()
-        self_mock._config = ConfigParser()
+        self_mock._import_config = ConfigParser()
         self_mock._chase_column_config_name_map = {
             "details" : "Details",
             "posting_date" : "Posting Date",
@@ -574,8 +563,8 @@ class TesatCSVHandlerBadConfigGeneralSectionMissingKey(TestCase):
 
     def test__convert_dataframe_to_chase_format_missing_GENERAL_config(self):
         self_mock = MagicMock()
-        self_mock._config = ConfigParser()
-        self_mock._config.add_section("GENERAL")
+        self_mock._import_config = ConfigParser()
+        self_mock._import_config.add_section("GENERAL")
         self_mock._chase_column_config_name_map = {
             "details" : "Details",
             "posting_date" : "Posting Date",
@@ -599,16 +588,16 @@ class TesatCSVHandlerBadConfigGeneralSectionMissingKey(TestCase):
 
     def test__convert_dataframe_to_chase_format_bad_GENERAL_config(self):
         self_mock = MagicMock()
-        self_mock._config = ConfigParser()
-        self_mock._config.add_section("GENERAL")
-        self_mock._config.set('GENERAL', 'details', '')
-        self_mock._config.set('GENERAL', 'posting_date', ' FOO ')
-        self_mock._config.set('GENERAL', 'description', ' 4 ')
-        self_mock._config.set('GENERAL', 'amount', ' 1 ')
-        self_mock._config.set('GENERAL', 'type', '2')
-        self_mock._config.set('GENERAL', 'balance', '')
-        self_mock._config.set('GENERAL', 'check_or_slip_number', '')
-        self_mock._config.set('GENERAL', 'extra_1', '')
+        self_mock._import_config = ConfigParser()
+        self_mock._import_config.add_section("GENERAL")
+        self_mock._import_config.set('GENERAL', 'details', '')
+        self_mock._import_config.set('GENERAL', 'posting_date', ' FOO ')
+        self_mock._import_config.set('GENERAL', 'description', ' 4 ')
+        self_mock._import_config.set('GENERAL', 'amount', ' 1 ')
+        self_mock._import_config.set('GENERAL', 'type', '2')
+        self_mock._import_config.set('GENERAL', 'balance', '')
+        self_mock._import_config.set('GENERAL', 'check_or_slip_number', '')
+        self_mock._import_config.set('GENERAL', 'extra_1', '')
         self_mock._chase_column_config_name_map = {
             "details" : "Details",
             "posting_date" : "Posting Date",

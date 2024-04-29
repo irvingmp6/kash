@@ -1,6 +1,7 @@
 import sqlite3
 from pathlib import Path
 
+
 def create_bank_activity_table(conn: sqlite3.Connection) -> None:
     """
     Create the bank activity table in the SQLite database.
@@ -13,11 +14,22 @@ def create_bank_activity_table(conn: sqlite3.Connection) -> None:
     """
     query = """
         CREATE TABLE
-            bank_activity(ID INTEGER PRIMARY KEY, Account_Alias, Transaction_ID, Details, 
-                Posting_Date, Description,  Amount, 
-                Type, Balance, Check_or_Slip_num, Reconciled,
-                Timestamp DATETIME DEFAULT CURRENT_TIMESTAMP);"""
+            bank_activity(
+                ID INTEGER PRIMARY KEY,
+                Account_Alias,
+                Transaction_ID,
+                Details,
+                Posting_Date,
+                Description,
+                Amount,
+                Type,
+                Balance,
+                Check_or_Slip_num,
+                Reconciled,
+                Timestamp DATETIME DEFAULT CURRENT_TIMESTAMP
+            );"""
     conn.execute(query)
+
 
 def check_bank_activity_table_exists(conn: sqlite3.Connection) -> None:
     """
@@ -30,14 +42,22 @@ def check_bank_activity_table_exists(conn: sqlite3.Connection) -> None:
         None
     """
     query = """
-        SELECT 
-                Account_Alias, Transaction_ID, Details, 
-                Posting_Date, Description, Amount, Type, 
-                Balance, Check_or_Slip_num, Reconciled, 
-                Timestamp
+        SELECT
+            Account_Alias,
+            Transaction_ID,
+            Details,
+            Posting_Date,
+            Description,
+            Amount,
+            Type,
+            Balance,
+            Check_or_Slip_num,
+            Reconciled,
+            Timestamp
         FROM
-                bank_activity;"""
+            bank_activity;"""
     conn.execute(query)
+
 
 def db_connection(path: str) -> sqlite3.Connection:
     """
@@ -56,9 +76,7 @@ def db_connection(path: str) -> sqlite3.Connection:
     file = Path(path)
     filepath = str(file.absolute()).replace("\\", "/")
 
-    new_db = False
-    if not file.is_file():
-        new_db = True
+    new_db = not file.is_file()
 
     if file.suffix != ".db":
         msg = f"File extension is not '.db':\n{filepath}"
@@ -66,17 +84,17 @@ def db_connection(path: str) -> sqlite3.Connection:
 
     con = sqlite3.connect(path)
 
-    if new_db:
-        create_bank_activity_table(con)
-        print(f"Created new DB:\n{filepath}")
-    else:
-        try:
+    try:
+        if new_db:
+            create_bank_activity_table(con)
+            print(f"Created new DB:\n{filepath}")
+        else:
             check_bank_activity_table_exists(con)
-            print(f"Connected to existing DB:\n{filepath}")
-        except Exception as e:
-            raise SQLOperationalError(e)
+    except Exception as e:
+        raise SQLOperationalError(e)
 
     return con
+
 
 def pathlib_path(filepath: str) -> str:
     """
@@ -97,14 +115,37 @@ def pathlib_path(filepath: str) -> str:
         raise FileNotFoundError(msg)
     return filepath
 
+
 class WrongFileExtension(Exception):
     """Exception raised when the file extension is incorrect."""
     pass
+
 
 class SQLOperationalError(Exception):
     """Exception raised when the query could not be executed correctly."""
     pass
 
+
 class ConfigSectionIncompleteError(Exception):
     """Exception raised when a configuration section is incomplete."""
+    pass
+
+
+class DuplicateAliasError(Exception):
+    """Exception raised when a duplicate alias is encountered."""
+    pass
+
+
+class QueryNotDefinedError(Exception):
+    """Exception raised when a query is not defined."""
+    pass
+
+
+class BadQueryStructureError(Exception):
+    """Exception raised for queries with bad structure."""
+    pass
+
+
+class UnknownAliasError(Exception):
+    """Exception raised for unknown aliases."""
     pass

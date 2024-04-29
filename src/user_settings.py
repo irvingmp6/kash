@@ -1,20 +1,71 @@
 import os
-from configparser import ConfigParser
+import argparse
+import configparser
 
 
 class UserSettings:
-    def __init__(self, args):
-        self.args = args
-        self.conn = args.sqlite_db if hasattr(self.args, 'sqlite_db') else None
-        self.csv_file = self.args.csv_file
-        self.account_alias = self.args.account_alias
-        self.commit = self.args.commit
-        self.config = self.get_config() if hasattr(self.args, 'config') else None
-        
-    def get_config(self):
-        config_filepath = self.args.config
-        if not os.path.isfile(config_filepath):
-            raise FileNotFoundError(f"Could not locate config file:\n{config_filepath}")
-        cp = ConfigParser()
-        cp.read(config_filepath)
+    """Base class for managing user settings."""
+
+    def __init__(self, cli_args: argparse.Namespace) -> None:
+        """
+        Initialize UserSettings with command-line arguments.
+
+        Args:
+            cli_args (argparse.Namespace): Command-line arguments parsed by argparse.
+        """
+        self.cli_args = cli_args
+        self.conn = getattr(cli_args, 'sqlite_db', None)  # SQLite database connection
+        self.commit = getattr(cli_args, 'commit', False)  # Whether to commit changes to database
+
+    def get_config_object(self, config_file: str) -> configparser.ConfigParser:
+        """
+        Get a ConfigParser object from the specified configuration file.
+
+        Args:
+            config_file (str): Path to the configuration file.
+
+        Returns:
+            configparser.ConfigParser: ConfigParser object initialized with the file contents.
+
+        Raises:
+            FileNotFoundError: If the specified config_file does not exist.
+        """
+        if not os.path.isfile(config_file):
+            raise FileNotFoundError(f"Could not locate config file:\n{config_file}")
+        cp = configparser.ConfigParser()
+        cp.read(config_file)
         return cp
+
+
+class ImportParserUserSettings(UserSettings):
+    """Class for managing user settings specific to import operations."""
+
+    def __init__(self, cli_args: argparse.Namespace) -> None:
+        """
+        Initialize ImportParserUserSettings with command-line arguments.
+
+        Args:
+            cli_args (argparse.Namespace): Command-line arguments parsed by argparse.
+        """
+        super().__init__(cli_args)
+        self.csv_file = cli_args.csv_file  # Path to the CSV file
+        self.account_alias = cli_args.account_alias  # Account alias for importing bank activity
+        self.import_config = self.get_config_object(cli_args.import_config) \
+            if hasattr(cli_args, 'import_config') else None  # ConfigParser object for import settings (used for non Chase CSV files)
+
+
+class GetQueryUserSettings(UserSettings):
+    """Class for managing user settings related to query operations."""
+
+    def __init__(self, cli_args: argparse.Namespace) -> None:
+        """
+        Initialize GetQueryUserSettings with command-line arguments.
+
+        Args:
+            cli_args (argparse.Namespace): Command-line arguments parsed by argparse.
+        """
+        super().__init__(cli_args)
+        self.queries_config_path = cli_args.queries_config  # Path to the queries configuration file
+        self.queries_config = self.get_config_object(self.queries_config_path)  # ConfigParser object for queries configuration file
+        self.query_calls = cli_args.query_calls  # Lis of query calls to execute
+        self.save_results = cli_args.save_results
