@@ -81,7 +81,7 @@ class Controller:
     """
     Base class for controllers.
     """
-    def __init__(self, cli_args: argparse.Namespace):
+    def __init__(self, cli_args: argparse.Namespace) -> None:
         """
         Initialize Controller with user settings.
 
@@ -91,7 +91,7 @@ class Controller:
         self._user_settings = UserSettings(cli_args)
         self._db_interface = DataBaseInterface(self._user_settings)
 
-    def start_process(self):
+    def start_process(self) -> None:
         """
         Placeholder method for starting a process.
 
@@ -103,7 +103,7 @@ class ImportParserController(Controller):
     """
     Controller for import operations.
     """
-    def __init__(self, cli_args: argparse.Namespace):
+    def __init__(self, cli_args: argparse.Namespace) -> None:
         """
         Initialize ImportParserController with user settings.
 
@@ -130,7 +130,7 @@ class GetQueryParserController(Controller):
     """
     Controller for query operations.
     """
-    def __init__(self, cli_args: argparse.Namespace):
+    def __init__(self, cli_args: argparse.Namespace) -> None:
         """
         Initialize GetQueryParserController with user settings.
 
@@ -143,7 +143,7 @@ class GetQueryParserController(Controller):
         self.call_query_map = self._create_query_alias_map()
         self.queries = self._get_queries()
 
-    def start_process(self):
+    def start_process(self) -> None:
         """
         Start the query process.
 
@@ -218,13 +218,12 @@ class GetQueryParserController(Controller):
         border_string = "+" + "+".join(border_parts) + "+"
         return border_string
 
-    def _display_row(self, row: pandas.Series, max_rows_to_display: int) -> int:
+    def _display_row(self, row: pandas.Series) -> None:
         """
         Display a formatted row of data.
 
         Args:
             row (pandas.Series): Row of data from the DataFrame.
-            max_rows_to_display (int): Maximum number of characters per column.
         """
         formatted_columns = [self._format_value(str(row[col_idx])[:30]) for col_idx in range(len(row))]
         formatted_output = "|" + "|".join(formatted_columns) + "|"

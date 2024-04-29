@@ -12,9 +12,6 @@ def get_help_menu() -> dict:
         'import-raw': {
             'import_config': """Config file containing mapping definitions"""
         },
-        # 'sql':{
-        #     'keys': """List of key that execute SQL queries"""
-        # }
     }
 
     return menu
