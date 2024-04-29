@@ -1,74 +1,55 @@
 import hashlib
 import argparse
 from datetime import datetime
-from datetime import timedelta
 from distutils.util import strtobool
 
 import pandas
 
-from src.interface_funcs import ConfigSectionIncompleteError
-from src.interface_funcs import DuplicateAliasError
-from src.interface_funcs import BadQueryStructureError
-from src.interface_funcs import UnknownAliasError
-from .user_settings import UserSettings
-from .user_settings import ImportParserUserSettings
-from .user_settings import GetQueryUserSettings
+from src.interface_funcs import DuplicateAliasError, BadQueryStructureError, UnknownAliasError
+from .user_settings import UserSettings, ImportParserUserSettings, GetQueryUserSettings
 
+# SQL queries
 select_transaction_ids_from_bank_activity_table = "SELECT transaction_id FROM bank_activity;"
 select_all_from_bank_activity_table = "SELECT * FROM bank_activity;"
 insert_into_bank_activity_table = """INSERT INTO bank_activity (Account_Alias, Transaction_ID, Details, Posting_Date, Description, Amount, Type, Balance, Check_or_Slip_num, Reconciled) VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?);"""
 
 def format_date(date_str: str, raw_format: str, new_format: str) -> str:
     """
-    Format a date string from one format to another.
+    Format date string from one format to another.
 
     Args:
-        date_str (str): The date string to be formatted.
-        raw_format (str): The format of the input date string.
-        new_format (str): The desired format of the output date string.
+        date_str (str): Input date string.
+        raw_format (str): Format of the input date string.
+        new_format (str): Desired format of the output date string.
 
     Returns:
-        str: The formatted date string.
+        str: Formatted date string in the new format.
     """
-    # Convert the date string to a datetime object using the raw format
     date_obj = datetime.strptime(date_str, raw_format)
-    
-    # Format the datetime object using the new format and return the result
     return date_obj.strftime(new_format)
 
 def format_amount(amount) -> float:
     """
-    Formats an amount string, int, or float value.
+    Convert amount to a float value.
 
     Args:
-        amount (str int, or float): The amount to be formatted.
+        amount: Input amount (either str, int, or float).
 
     Returns:
-        float: The formatted amount.
+        float: Converted amount value.
     """
-    if type(amount) == str:
-        # Remove any dollar sign from the amount string
+    if isinstance(amount, str):
         amount = amount.replace("$", "")
-        
-        # If the amount is in parentheses, it represents a negative value
         if amount[0] == "(" and amount[-1] == ")":
-            # Convert the negative amount string to a float by removing parentheses and appending a negative sign
             amount = "-" + amount[1:-1]
-        
-    # Convert to a float and return it
     return float(amount)
-    
 
-def print_bank_activity_dataframe(df:pandas.DataFrame) -> None:
+def print_bank_activity_dataframe(df: pandas.DataFrame) -> None:
     """
-    Prints the number of transactions and displays details such as posting 
-    date, amount, description, and account alias in a formatted table.
+    Print formatted bank activity DataFrame.
 
     Args:
-        df (pandas.DataFrame): DataFrame containing transaction data.
-
-    Returns:
-        None
+        df (pandas.DataFrame): DataFrame containing bank activity data.
     """
     new_transactions_count = len(df.index)
     if new_transactions_count:
@@ -97,19 +78,47 @@ def print_bank_activity_dataframe(df:pandas.DataFrame) -> None:
         print("No transactions")
 
 class Controller:
-    def __init__(self, cli_args:argparse.Namespace):
+    """
+    Base class for controllers.
+    """
+    def __init__(self, cli_args: argparse.Namespace):
+        """
+        Initialize Controller with user settings.
+
+        Args:
+            cli_args (argparse.Namespace): Command-line arguments.
+        """
         self._user_settings = UserSettings(cli_args)
         self._db_interface = DataBaseInterface(self._user_settings)
-    
+
     def start_process(self):
+        """
+        Placeholder method for starting a process.
+
+        This method should be overridden by subclasses.
+        """
         raise NotImplementedError
 
 class ImportParserController(Controller):
-    def __init__(self, cli_args:argparse.Namespace) -> None:
-        super(ImportParserController, self).__init__(cli_args)
-        self._user_settings = ImportParserUserSettings(cli_args) # Override base user_settings
+    """
+    Controller for import operations.
+    """
+    def __init__(self, cli_args: argparse.Namespace):
+        """
+        Initialize ImportParserController with user settings.
+
+        Args:
+            cli_args (argparse.Namespace): Command-line arguments.
+        """
+        super().__init__(cli_args)
+        self._user_settings = ImportParserUserSettings(cli_args)
 
     def start_process(self) -> None:
+        """
+        Start the import process.
+
+        This method retrieves new transactions from a CSV file and inserts them into the bank activity table.
+        """
         csv_file = self._user_settings.csv_file
         existing_transaction_ids = self._db_interface.get_existing_transaction_ids()
         csv_handler = CSVHandler(self._user_settings, existing_transaction_ids)
@@ -118,14 +127,28 @@ class ImportParserController(Controller):
         print_bank_activity_dataframe(new_transactions_df)
 
 class GetQueryParserController(Controller):
-    def __init__(self, cli_args:argparse.Namespace) -> None:
-        super(GetQueryParserController, self).__init__(cli_args)
-        self._user_settings = GetQueryUserSettings(cli_args) # Override base user_settings
+    """
+    Controller for query operations.
+    """
+    def __init__(self, cli_args: argparse.Namespace):
+        """
+        Initialize GetQueryParserController with user settings.
+
+        Args:
+            cli_args (argparse.Namespace): Command-line arguments.
+        """
+        super().__init__(cli_args)
+        self._user_settings = GetQueryUserSettings(cli_args)
         self.queries_config = self._user_settings.queries_config
         self.call_query_map = self._create_query_alias_map()
         self.queries = self._get_queries()
 
     def start_process(self):
+        """
+        Start the query process.
+
+        This method executes predefined queries based on user input.
+        """
         try:
             max_rows_to_display = self.queries_config.get("GENERAL", "max_rows_to_display", fallback=None)
             max_rows_to_display = int(max_rows_to_display)
@@ -136,19 +159,38 @@ class GetQueryParserController(Controller):
             df = pandas.DataFrame(self._db_interface.execute_query(query))
             print(f'\n"{query_call}" results:')
             for row_idx, row in df.head(max_rows_to_display).iterrows():
-                print("+"+"+".join(["-"*len("{: >15} ".format(str(row[col_idx])[:30])) for col_idx in range(len(row))]) + "+")
+                print("+" + "+".join(["-" * len("{: >15} ".format(str(row[col_idx])[:30])) for col_idx in range(len(row))]) + "+")
                 formatted_columns = []
                 for col_idx in range(len(row)):
                     formatted_value = "{: >15} ".format(str(row[col_idx])[:30])
                     formatted_columns.append(formatted_value)
                 formatted_output = "|" + "|".join(formatted_columns) + "|"
                 print(formatted_output)
-            print("+".join(["-"*len("{: >15} ".format(str(row[col_idx])[:30])) for col_idx in range(len(row))]) + "-+")
+            print("+" + "+".join(["-" * len("{: >15} ".format(str(row[col_idx])[:30])) for col_idx in range(len(row))]) + "-+")
 
     def _get_queries(self):
+        """
+        Retrieve and validate user queries.
+
+        Returns:
+            list: List of validated queries.
+        """
         return [(query_call, self._validate_query(query_call)) for query_call in self._user_settings.query_calls]
 
     def _validate_query(self, query):
+        """
+        Validate user query.
+
+        Args:
+            query (str): User-provided query.
+
+        Raises:
+            UnknownAliasError: If the query alias is unknown.
+            BadQueryStructureError: If the query structure is invalid.
+
+        Returns:
+            str: Validated query.
+        """
         try:
             query = self.call_query_map[query]
             if "UPDATE" in query.upper() or "DELETE" in query.upper() or "DROP" in query.upper():
@@ -158,6 +200,15 @@ class GetQueryParserController(Controller):
         return query.strip('"""')
 
     def _create_query_alias_map(self):
+        """
+        Create a map of query aliases to their corresponding SQL queries.
+
+        Raises:
+            KeyError: If an alias is defined to a key that doesn't exist in QUERIES.
+
+        Returns:
+            dict: Mapping of query aliases to SQL queries.
+        """
         query_alias_map = {}
         for key in self.queries_config["ALIASES"]:
             for value in self.queries_config["ALIASES"][key].strip().split(","):
@@ -171,26 +222,16 @@ class GetQueryParserController(Controller):
                     raise DuplicateAliasError(f"{alias}: Alias is used multiple times in [ALIASES]: {self._user_settings.queries_config_path}")
         return query_alias_map
 
-
 class DataBaseInterface:
     """
-    Class to interface with the database.
-
-    Attributes:
-        _user_settings (UserSettings): User settings object.
-        _conn: Connection to the database.
-        _commit (bool): Flag indicating whether changes should be committed to the database.
-
-    Methods:
-        get_existing_transaction_ids() -> list: Retrieve existing transaction IDs from the database.
-        insert_df_into_bank_activity_table(df: pandas.DataFrame) -> None: Insert DataFrame into the bank activity table.
+    Interface for interacting with the database.
     """
-    def __init__(self, user_settings:UserSettings) -> None:
+    def __init__(self, user_settings: UserSettings):
         """
         Initialize DataBaseInterface with user settings.
 
         Args:
-            user_settings (ImportParserUserSettings): User settings object.
+            user_settings (UserSettings): User settings instance.
         """
         self._user_settings = user_settings
         self._conn = self._user_settings.conn
@@ -206,22 +247,15 @@ class DataBaseInterface:
         records = self._conn.execute(select_transaction_ids_from_bank_activity_table).fetchall()
         return [record[0] for record in records]
 
-    def insert_df_into_bank_activity_table(self, df:pandas.DataFrame) -> None:
+    def insert_df_into_bank_activity_table(self, df: pandas.DataFrame) -> None:
         """
         Insert DataFrame into the bank activity table.
 
         Args:
-            df (pandas.DataFrame): DataFrame containing transaction data.
-
-        Returns:
-            None
+            df (pandas.DataFrame): DataFrame to be inserted.
         """
-        # Reset index of the DataFrame
         df = df.reset_index()
-
-        # Iterate over each row in the DataFrame
         for _, row in df.iterrows():
-            # Extract transaction details from the row
             account_alias = row["Account Alias"]
             transaction_id = row['Transaction ID']
             details = row["Details"]
@@ -232,27 +266,25 @@ class DataBaseInterface:
             type_ = row["Type"]
             balance = row["Balance"]
             check_or_slip_num = row["Check or Slip #"]
-            reconciled = 'N' # Reconciled is used for tracking purposes.
-            # 'N' means the system has NOT confirmed this transaction against expected transaction. 
-            # 'Y' means the system has confirmed this transaction against expected transaction.
-            # Setting it to 'N' by default allows the opportunity to programatically analyze cashflow.
-            # Plans to have kash automatate reconciliation are in the works.
-            # This flag was added early so that the bank_activity table does not have to be 
-            # modified in later versions when this reconciliation feature is completed
-
-            # Create a tuple of values to be inserted into the database
+            reconciled = 'N'
             values = (account_alias, transaction_id, details, formatted_posting_date,
-                    description, amount, type_, balance, check_or_slip_num, reconciled)
-
-            # Execute SQL query to insert values into the database
+                      description, amount, type_, balance, check_or_slip_num, reconciled)
             if self._commit:
                 self._conn.execute(insert_into_bank_activity_table, values)
-
-        # Commit changes to the database if required
         if self._commit:
             self._conn.commit()
 
-    def execute_query(self, query:str,args:list=None):
+    def execute_query(self, query: str, args: list = None):
+        """
+        Execute SQL query.
+
+        Args:
+            query (str): SQL query string.
+            args (list, optional): Query arguments.
+
+        Returns:
+            list: Query results.
+        """
         if args:
             print(query)
             return self._conn.execute(query, args).fetchall()
