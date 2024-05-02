@@ -197,7 +197,7 @@ class GetQueryParserController(Controller):
                 print(table_border)
 
             # Display row
-            self._display_row(row, max_rows_to_display)
+            self._display_row(row)
 
             # Display boder
             if row_idx == max_rows_to_display-1:
