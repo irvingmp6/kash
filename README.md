@@ -1,63 +1,96 @@
 # Kash
-A command line utility to allow you to import your bank activity into a local database.
+A CLI app that allows you to interact with your bank activity.
 
-Kash first checks if the path provided is an existing database with the required table. 
+Kash helps you consolidate all your transaction history from multiple banks into a single database table.
 
-If the path provided is not an existing database, Kash will create a new database using the path provided and create a table inside that new db.
+Kash also allows you to pull specific records through stored queries on demand.
 
-Kash updates the table with csv's transactions. It does this by converting the CSV files into a dataframe. 
+## Prerequisites
+* python 3.8 or higher
+* Some basic SQL knowledge (to set up your custom queries)
 
-Kash will never insert duplicate transactions nor will it insert pending transactions. 
+## Set Up and Installation
+**Download** the repository
+```
+$ git clone git@github.com:irvingmp6/kash.git
+```
+### (Optional) Installing in a Python Virtual Environment
+To avoid updating current packages on your current python set up, it's always good practice to isolate any new package dependencies with a virtual environment.
 
-Kash only updates the table with "settled" transactions to keep the table nice and clean. This is done for two resons. One, because "pending" transactions look different from the "settled" ones, there is no programatic way to tell when a "pending" transaction has settled unless we used a complex algorithm. Even then, the pay off isn't worth it if we're already going to insert the transaction once it settles in a few days. Two, "pending" transactions are at risk of being reversed and ultimately disappear from the bank statement. Again, I can develop the algorithm to check if it disappeared but the pay off isn't worth it in this case either.
+**Create** a new Python virtual environment. I'm calling mine `kashEnv`.
+```
+$ python -v venv kashEnv
+```
+**Activate** the virtual environment (for Windows users)
+```
+$ source kashEnv/Scripts/activate 
+```
+**Activate** the virtual environment (for MacOS or Linux users)
+```
+$ source kashEnv/bin/activate
+```
+### Installing the package
+Once you have the code downloaded (and you created a virtual enviornment), you're ready to **install** Kash.
+```
+$ python -m pip install -e ./kash
+```
+## Usage
+Kash allows you to import your bank activity into a database through one of two ways:
+* `kash import` - used for importing Chase CSV files*
+* `kash import-raw`used for importing non-Chase CSV files*
 
-# Usage
-## Installation
+* Banks allow you to download your own transaction history from their website when you log into your account.
+#### How to download your Chase transactions:
+1. Login to your [Chase](https://secure.chase.com/web/auth/dashboard#/dashboard/index/index) account.
+2. Choose a bank account.
+3. Click on the download icon under Transactions. This will take you to a "Download account activity" page.
+4. Leave the default settings: 
+* **Account**: The account you selected
+* **File type**: Spreadsheet (Excel, CSV)
+* **Activity**: Current display, including filters
+5. Click "Download"
+#### How to download your transactions from other non-Chase banks
+1. Login to your bank's website.
+2. Select an account.
+3. Look for a download transactions button and click on it.
+4. Definte a date range (if prompted).
+5. Download the transactions as a CSV file.
+### Importing your transactions into a database
+Kash automatically sets up a new SQLite database when you run `kash import` or `kash import-raw` for the first time.
+### The `kash import` subcommand
+To import Chase CSV files into a database, use the `kash import` subcommand. It expects two positional arguments:
+1. The path to a database (.db) file. Kash will verify if the patch exists. If it doesn't, it will create a new database in the path provided. If one does exist, it will attemt to connect to it and check to see if it contains a table named `bank_activity` with the proper columns. If the connectin or check fails, the program will error out. 
+2. The path to the Chase CSV file.
 ```
-$ git clone https://github.com/irvingmp6/kash.git
-$ pip install -e ./kash
+$ kash import /path/to/database.db /path/to/chase_bank_activity.csv
 ```
-## Test using sample data (Chase)
-### kash import
-Let's `import` transactions into the database using a sample chase CSV file. The following command will initialize the database and will show you the records that are ready to be imported.
-```
-$ kash import test.db kash/test_files/sample_chase_bank_activity.csv --account-alias "Chase" 
-```
-The following command actually imports the records. Notice the `--commit` at the end.
-```
-$ kash import test.db kash/test_files/sample_chase_bank_activity.csv --account-alias "Chase" --commit
-```
-The following command shows you that there is nothing new to import (because we already imported the data in the last command using `--commit`).
-```
-$ kash import test.db kash/test_files/sample_chase_bank_activity.csv --account-alias "Chase" 
-```
+Kash will compare the incoming transactions against the transactions that exists in the database and print out a summary of all the new transactions.
 
-## Test using sample data other than Chase
-### kash import-raw
-Let's use sample files that are different from Chase. The following commands make use of `import-raw` which requires the path to a config file as another parameter.
+Kash will commit the inserts if the --commit flag is passed:
 ```
-$ kash import-raw test.db kash/test_files/wells_fargo_config.ini kash/test_files/sample_wf_bank_activity.csv --account-alias "WF"
-$ kash import-raw test.db kash/test_files/wells_fargo_config.ini kash/test_files/sample_wf_bank_activity.csv --account-alias "WF" --commit
-$ kash import-raw test.db kash/test_files/wells_fargo_config.ini kash/test_files/sample_wf_bank_activity.csv --account-alias "WF"
+$ kash import /path/to/database.db /path/to/chase_bank_activity.csv --commit
+```
+Don't worry if you accidentally commit the same file twice. Kash's duplicate checking prevents the same transactions from entering the system.
+### The `kash import-raw` subcommand
+To import non-Chase CSV files into a database, use the `kash import-raw` subcommand. It expects three positional arguments:
+1. The path to a database (.db) file. Kash will verify if the patch exists. If it doesn't, it will create a new database in the path provided. If one does exist, it will attemt to connect to it and check to see if it contains a table named `bank_activity` with the proper columns. If the connectin or check fails, the program will error out. 
+2. The path to a config file that maps out the columns the CSv file*
+3. The path to the non-Chase CSV file.
+```
+$ kash import /path/to/database.db /path/to/bank_config.ini /path/to/other_non-chase_bank_activity.csv
+```
+Just like with the `kash import-raw`, Kash will compare the incoming transactions against the transactions that exists in the database and print out a summary of all the new transactions.
 
+Similarly, Kash will only commit the inserts if the --commit flag is passed:
 ```
-## Some more test files
-I included more test files using a different bank to show you how the configurations are different.
+$ kash import /path/to/database.db /path/to/bank_config.ini /path/to/other_non-chase_bank_activity.csv --commit
 ```
-$ kash import-raw test.db kash/test_files/truist_config.ini kash/test_files/sample_truist_bank_activity.csv --account-alias "Truist"
-$ kash import-raw test.db kash/test_files/truist_config.ini kash/test_files/sample_truist_bank_activity.csv --account-alias "Truist" --commit
-$ kash import-raw test.db kash/test_files/truist_config.ini kash/test_files/sample_truist_bank_activity.csv --account-alias "Truist"
+*To learn about how to set up a config files to import non-Chase csv files, visit the documnetation which explains this in further detail.
+### The `kash get` subcommand
+Kash allows you to fetch specific results from stored queries using the `kash get` subcommand. It expects two positionsl arguments:
+1. The path to a configuration file that contains all the stored queries and their aliases.* 
+2. A space-delimited list of pre-defined aliases that have been mapped to SQL querues in the configuration file*
 ```
-
-# How I use it
-I created this app for myself as a way to query the transactions from a bank account that I strictly dedicate to paying bills. All of my payments are made through auto-pay, so I use this app/db to check if payments were in fact made instead of manually looking them up in a csv file.
-
-I augment this with a separate system where I calculate a financial forecast that tells me how much money I will every day for the next few months to allow me to budget throughout the year and better plan for bigger expenses.
-## Future plans
-I have future plans to add this kind of functionality into the app. (Side note, I did have something like this built in but it required more dev work to get it to crunch the numbers and match my separate system. Because of that I ended up scrapping the idea unplugging all of the extra functionality from it.)
-## Automation
-I also have a wrapper python app that automatically (and securely) downloads the bank files which then calls Kash to make the inserts. That kind of automation is outside the scope of what Kash does, which is why I did not include that in Kash. I might create a separate repo to house that project. But for now, it's just sitting in my local machine.
-## SQL
-For now, I'm using SQLLiteStudio to query my transactions. 
-Documentation: https://sqlitestudio.pl/
-When I get more time, I'll add functionality to return records based through the terminal instead of using a different app.
+$ kash get /path/to/stored_queries.ini query_alias_1 query_alias_2 query_alias_3
+```
+*To learn about how to set up a config files to store queries and their aliases, visit the documnetation which explains this in further detail.
