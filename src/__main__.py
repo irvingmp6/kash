@@ -1,7 +1,6 @@
 import argparse
 import textwrap
-
-from _version import __version__
+from importlib.metadata import version as get_version
 
 from src.controller import ImportParserController, GetQueryParserController
 from src.interface_text import get_help_menu
@@ -13,6 +12,8 @@ from src.interface_funcs import (
     BadQueryStructureError,
     UnknownAliasError,
 )
+
+version = get_version = ".".join(get_version("Kash").split("."))
 
 def get_cli_args() -> argparse.Namespace:
     """
@@ -29,6 +30,12 @@ def get_cli_args() -> argparse.Namespace:
         formatter_class=argparse.RawDescriptionHelpFormatter,
         description=textwrap.dedent(help_menu['desc'])
     )
+
+    cli.add_argument(
+        '--version', action='version',
+        version='%(prog)s {version}'.format(version=version)
+    )
+
     subparsers = cli.add_subparsers(help=help_menu['subparsers'])
 
     # Create Import Subparser

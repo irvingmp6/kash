@@ -1,19 +1,19 @@
 from setuptools import find_packages, setup
-from _version import __version__
 
 setup(
     name='kash',
-    version=__version__,
+    version='0.1.1',
     author = "Irving Martinez",
     packages=find_packages(),
     install_requires =[
-        'numpy==1.24.4',
-        'pandas==2.0.3',
-        'python-dateutil==2.8.2',
-        'pytz==2023.3.post1',
+        'coverage==7.5.0',
+        'numpy==1.26.4',
+        'pandas==2.2.2',
+        'python-dateutil==2.9.0.post0',
+        'pytz==2024.1',
+        'setuptools==69.5.1',
         'six==1.16.0',
-        'tzdata==2023.3',
-        'coverage'
+        'tzdata==2024.1',
     ],
     entry_points = {
         'console_scripts': [
