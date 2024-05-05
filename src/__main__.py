@@ -128,7 +128,23 @@ def get_cli_args() -> argparse.Namespace:
         action='store_true',
     )
 
+    cashflow_parser = subparsers.add_parser('cashflow')
+    cashflow_parsers = cashflow_parser.add_subparsers()
+
+    get_expected_parser = cashflow_parsers.add_parser('get-expected-transactions')
+    get_expected_parser.set_defaults(func=start_get_expected_transacations_process)
+    get_expected_parser.add_argument(
+        'sqlite_db',
+        metavar='<SQLITE DB>',
+        type=db_connection,
+    )
+
     return cli.parse_args()
+
+def start_get_expected_transacations_process(cli_args: argparse.Namespace) -> None:
+    # controller = GetExpectedTransactionsController(cli_args)
+    # GetExpectedTransactionsController.start_process()
+    print("Printing ExpectedTransactions table active records")
 
 def start_import_process(cli_args: argparse.Namespace) -> None:
     """
