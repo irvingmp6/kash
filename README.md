@@ -13,7 +13,7 @@
     <img src="docs/images/readme-kash-logo.png" alt="Logo" width="300" height="auto">
   </a>
   <p align="center">
-    An awesome personal finance application!
+    An awesome personal finance framework!
     <br />
     <a href="https://irvingmp6.github.io/kash/"><strong>Explore the docs »</strong></a>
     <br />
@@ -57,44 +57,54 @@
 
 <!-- ABOUT THE PROJECT -->
 ## About The Project
-There are many great personal finance tools on the internet; however, I didn't find one that really suited my needs so I created this little console app that I want to share with you. 
 
-In addition to the application, I'll also be sharing a pre-built cashflow forecasting system to give you the power to make better and wiser financial decisions for you and your family.
+[![Product Name Screen Shot][product-screenshot]](https://example.com)
+
+There are many great personal finance tools on the internet; however, I didn't find one that really suited my needs so I created this little project that I want to share with you.
+
+Kash is a framework that allows you to better manage your financials. The framework consists of:
+* A console app to consolidate and query your bank activity
+* A pre-built Excel workbook template that contains all the ability to perform an accurate daily forecast of your financials for up to 3 months into the future
 
 Here's why:
 * We're human. We do human things like accidentally spend the money that was meant for the electric bill. 
-* Your time is precious. Everyone should budget but no one has the time to spend scroll through their bank statements or create complex formulas in an Excel spreadsheet.
-* Unfortunately, a lot of personal finance tools fail to give you the day-to-day financial insights that really tell you where you stand.
+* Your time is precious. We all know we should budget but no one has the time to scroll through their bank statements or to create complex formulas in an Excel spreadsheet.
+* Unfortunately, a lot of personal finance tools fail to give you the financial insights that really tell you where you stand on a day-to-day basis.
 
 This repository comes with all you need right out of the box. You just focus on the easy stuff.
-
-Of course, no one product will serve everyone. Your needs may be different. So I'll be adding some more features in the near future. You may also suggest changes by forking this repo and creating a pull request or opening an issue.
 
 <p align="right">(<a href="#readme-top">back to top</a>)</p>
 
 ### Built With
 
-The console app was developed using Python 3.12. 
+The console app was developed using Python 3.12. It uses *Pandas* and *SQLite* to do the heavy lifting.
 
 * ![Python](https://img.shields.io/badge/python-3670A0?style=for-the-badge&logo=python&logoColor=ffdd54)
+* ![Pandas](https://img.shields.io/badge/pandas-%23150458.svg?style=for-the-badge&logo=pandas&logoColor=white)
+* ![SQLite](https://img.shields.io/badge/sqlite-%2307405e.svg?style=for-the-badge&logo=sqlite&logoColor=white)
+
+The pre-built workbook template was created using Excel.
+* ![Microsoft Excel](https://img.shields.io/badge/Microsoft_Excel-217346?style=for-the-badge&logo=microsoft-excel&logoColor=white)
 
 <p align="right">(<a href="#readme-top">back to top</a>)</p>
+
+
 
 
 
 <!-- GETTING STARTED -->
 ## Getting Started
 
-This is an example of how you may give instructions on setting up your project locally.
-To get a local copy up and running follow these simple example steps.
+The installation process is fairly simple. There are just a couple prerequisites you want to make sure you have. 
 
 ### Prerequisites
-* python 3.12 or higher
-* Some basic SQL knowledge (to set up your custom queries)
+* [Python 3.12](https://www.python.org/downloads/release/python-3123/)
+* [Basic SQL knowledge](https://www.w3schools.com/sql/default.asp) (to set up your custom queries)
 
 ### Installation
+Once you have Python 3.12 set up, you have the option of setting up a virtual environment.
 #### (Optional) Setting up a Python Virtual Environment
-To avoid updating current packages on your current python set up, it's always good practice to isolate any new package dependencies with a virtual environment.
+To avoid updating current packages on your global python set up, it's always good practice to isolate any new package dependencies with a virtual environment.
 
 **Create** a new Python virtual environment. I'm calling mine `kashEnv`.
 ```
@@ -109,11 +119,13 @@ $ source kashEnv/Scripts/activate
 $ source kashEnv/bin/activate
 ```
 #### Installing the package
+To install the package, follow tehese steps.
+
 **Download** the repository
 ```
 $ git clone git@github.com:irvingmp6/kash.git
 ```
-Once you have the code downloaded, you're ready to **install** Kash.
+Once you have the code downloaded, **install** Kash.
 ```
 $ python -m pip install -e ./kash
 ```
@@ -136,13 +148,16 @@ _For more examples, please refer to the [Documentation](https://example.com)_
 <!-- ROADMAP -->
 ## Roadmap
 
-- [x] Add Changelog
-- [x] Add back to top links
-- [ ] Add Additional Templates w/ Examples
-- [ ] Add "components" document to easily copy & paste sections of the readme
-- [ ] Multi-language Support
-    - [ ] Chinese
-    - [ ] Spanish
+- [x] Add ability to consolidate bank activity into a single database
+- [x] Add ability to fetch transactions from the console
+- [ ] Add Changelog
+- [ ] Add to documentation to the Kash Documentation Hub pages:
+    - [ ] "Home"
+    - [ ] "Getting Started"
+    - [ ] "Importing Bank Transactions"
+    - [ ] "Querying Bank Transactions"
+    - [ ] "Forecasting"
+    - [ ] "Tutorial"
 
 See the [open issues](https://github.com/irvingmp6/kash/issues) for a full list of proposed features (and known issues).
 
@@ -180,29 +195,12 @@ Distributed under the MIT License. See `LICENSE.txt` for more information.
 <!-- CONTACT -->
 ## Contact
 
-Your Name - [@your_twitter](https://twitter.com/your_username) - email@example.com
+Irving Martinez - [@irving-mtz](https://linkedin.com/in/irving-mtz) - irvingmp6@hotmail.com
 
-Project Link: [https://github.com/your_username/repo_name](https://github.com/your_username/repo_name)
-
-<p align="right">(<a href="#readme-top">back to top</a>)</p>
-
-
-
-<!-- ACKNOWLEDGMENTS -->
-## Acknowledgments
-
-Use this space to list resources you find helpful and would like to give credit to. I've included a few of my favorites to kick things off!
-
-* [Choose an Open Source License](https://choosealicense.com)
-* [GitHub Emoji Cheat Sheet](https://www.webpagefx.com/tools/emoji-cheat-sheet)
-* [Malven's Flexbox Cheatsheet](https://flexbox.malven.co/)
-* [Malven's Grid Cheatsheet](https://grid.malven.co/)
-* [Img Shields](https://shields.io)
-* [GitHub Pages](https://pages.github.com)
-* [Font Awesome](https://fontawesome.com)
-* [React Icons](https://react-icons.github.io/react-icons/search)
+Project Link: [https://github.com/irvingmp6/kash](https://github.com/irvingmp6/kash)
 
 <p align="right">(<a href="#readme-top">back to top</a>)</p>
+
 
 
 
@@ -220,7 +218,7 @@ Use this space to list resources you find helpful and would like to give credit 
 [license-url]: https://github.com/irvingmp6/kash/blob/master/LICENSE.txt
 [linkedin-shield]: https://img.shields.io/badge/-LinkedIn-black.svg?style=for-the-badge&logo=linkedin&colorB=555
 [linkedin-url]: https://linkedin.com/in/irving-mtz
-[website-shield]: https://img.shields.io/badge/any_text-you_like-blue
+[website-shield]: https://img.shields.io/badge/website-blue
 [website-url]: https://img.shields.io/badge/any_text-you_like-blue
 [product-screenshot]: images/screenshot.png
 [Next.js]: https://img.shields.io/badge/next.js-000000?style=for-the-badge&logo=nextdotjs&logoColor=white
