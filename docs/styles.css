@@ -15,7 +15,8 @@ header {
 }
 
 .logo img {
-    height: 50px;
+    width: 175px;
+    height: auto;
 }
 
 nav ul {

@@ -1,20 +1,99 @@
-# Kash
-A CLI app that allows you to interact with your bank activity.
+[![Contributors][contributors-shield]][contributors-url]
+[![Forks][forks-shield]][forks-url]
+[![Issues][issues-shield]][issues-url]
+[![MIT License][license-shield]][license-url]
+[![LinkedIn][linkedin-shield]][linkedin-url]
+[![Website][website-shield]][website-url]
 
-Kash helps you consolidate all your transaction history from multiple banks into a single database table.
 
-Kash also allows you to pull specific records through stored queries on demand.
+<!-- PROJECT LOGO -->
 
-## Prerequisites
-* python 3.8 or higher
+<div align="center">
+  <a href="https://github.com/irvingmp6/kash">
+    <img src="docs/images/readme-kash-logo.png" alt="Logo" width="300" height="auto">
+  </a>
+  <p align="center">
+    An awesome personal finance application!
+    <br />
+    <a href="https://irvingmp6.github.io/kash/"><strong>Explore the docs »</strong></a>
+    <br />
+    <br />
+    <a href="https://irvingmp6.github.io/kash/Demo">View Demo</a>
+    ·
+    <a href="https://github.com/irvingmp6/kash/issues/new?labels=bug&template=bug-report---.md">Report Bug</a>
+    ·
+    <a href="https://github.com/irvingmp6/kash/issues/new?labels=enhancement&template=feature-request---.md">Request Feature</a>
+  </p>
+</div>
+
+
+
+<!-- TABLE OF CONTENTS -->
+<details>
+  <summary>Table of Contents</summary>
+  <ol>
+    <li>
+      <a href="#about-the-project">About The Project</a>
+      <ul>
+        <li><a href="#built-with">Built With</a></li>
+      </ul>
+    </li>
+    <li>
+      <a href="#getting-started">Getting Started</a>
+      <ul>
+        <li><a href="#prerequisites">Prerequisites</a></li>
+        <li><a href="#installation">Installation</a></li>
+      </ul>
+    </li>
+    <li><a href="#usage">Usage</a></li>
+    <li><a href="#license">License</a></li>
+    <li><a href="#contact">Contact</a></li>
+    <li><a href="#acknowledgments">Acknowledgments</a></li>
+  </ol>
+</details>
+
+
+
+
+<!-- ABOUT THE PROJECT -->
+## About The Project
+There are many great personal finance tools on the internet; however, I didn't find one that really suited my needs so I created this little console app that I want to share with you. 
+
+In addition to the application, I'll also be sharing a pre-built cashflow forecasting system to give you the power to make better and wiser financial decisions for you and your family.
+
+Here's why:
+* We're human. We do human things like accidentally spend the money that was meant for the electric bill. 
+* Your time is precious. Everyone should budget but no one has the time to spend scroll through their bank statements or create complex formulas in an Excel spreadsheet.
+* Unfortunately, a lot of personal finance tools fail to give you the day-to-day financial insights that really tell you where you stand.
+
+This repository comes with all you need right out of the box. You just focus on the easy stuff.
+
+Of course, no one product will serve everyone. Your needs may be different. So I'll be adding some more features in the near future. You may also suggest changes by forking this repo and creating a pull request or opening an issue.
+
+<p align="right">(<a href="#readme-top">back to top</a>)</p>
+
+### Built With
+
+The console app was developed using Python 3.12. 
+
+* ![Python](https://img.shields.io/badge/python-3670A0?style=for-the-badge&logo=python&logoColor=ffdd54)
+
+<p align="right">(<a href="#readme-top">back to top</a>)</p>
+
+
+
+<!-- GETTING STARTED -->
+## Getting Started
+
+This is an example of how you may give instructions on setting up your project locally.
+To get a local copy up and running follow these simple example steps.
+
+### Prerequisites
+* python 3.12 or higher
 * Some basic SQL knowledge (to set up your custom queries)
 
-## Set Up and Installation
-**Download** the repository
-```
-$ git clone git@github.com:irvingmp6/kash.git
-```
-### (Optional) Installing in a Python Virtual Environment
+### Installation
+#### (Optional) Setting up a Python Virtual Environment
 To avoid updating current packages on your current python set up, it's always good practice to isolate any new package dependencies with a virtual environment.
 
 **Create** a new Python virtual environment. I'm calling mine `kashEnv`.
@@ -29,68 +108,120 @@ $ source kashEnv/Scripts/activate
 ```
 $ source kashEnv/bin/activate
 ```
-### Installing the package
-Once you have the code downloaded (and you created a virtual enviornment), you're ready to **install** Kash.
+#### Installing the package
+**Download** the repository
+```
+$ git clone git@github.com:irvingmp6/kash.git
+```
+Once you have the code downloaded, you're ready to **install** Kash.
 ```
 $ python -m pip install -e ./kash
 ```
+
+<p align="right">(<a href="#readme-top">back to top</a>)</p>
+
+
+
+<!-- USAGE EXAMPLES -->
 ## Usage
-Kash allows you to import your bank activity into a database through one of two ways:
-* `kash import` - used for importing Chase CSV files*
-* `kash import-raw`used for importing non-Chase CSV files*
 
-* Banks allow you to download your own transaction history from their website when you log into your account.
-#### How to download your Chase transactions:
-1. Login to your [Chase](https://secure.chase.com/web/auth/dashboard#/dashboard/index/index) account.
-2. Choose a bank account.
-3. Click on the download icon under Transactions. This will take you to a "Download account activity" page.
-4. Leave the default settings: 
-* **Account**: The account you selected
-* **File type**: Spreadsheet (Excel, CSV)
-* **Activity**: Current display, including filters
-5. Click "Download"
-#### How to download your transactions from other non-Chase banks
-1. Login to your bank's website.
-2. Select an account.
-3. Look for a download transactions button and click on it.
-4. Definte a date range (if prompted).
-5. Download the transactions as a CSV file.
-### Importing your transactions into a database
-Kash automatically sets up a new SQLite database when you run `kash import` or `kash import-raw` for the first time.
-### The `kash import` subcommand
-To import Chase CSV files into a database, use the `kash import` subcommand. It expects two positional arguments:
-1. The path to a database (.db) file. Kash will verify if the patch exists. If it doesn't, it will create a new database in the path provided. If one does exist, it will attemt to connect to it and check to see if it contains a table named `bank_activity` with the proper columns. If the connectin or check fails, the program will error out. 
-2. The path to the Chase CSV file.
-```
-$ kash import /path/to/database.db /path/to/chase_bank_activity.csv
-```
-Kash will compare the incoming transactions against the transactions that exists in the database and print out a summary of all the new transactions.
+Use this space to show useful examples of how a project can be used. Additional screenshots, code examples and demos work well in this space. You may also link to more resources.
 
-Kash will commit the inserts if the --commit flag is passed:
-```
-$ kash import /path/to/database.db /path/to/chase_bank_activity.csv --commit
-```
-Don't worry if you accidentally commit the same file twice. Kash's duplicate checking prevents the same transactions from entering the system.
-### The `kash import-raw` subcommand
-To import non-Chase CSV files into a database, use the `kash import-raw` subcommand. It expects three positional arguments:
-1. The path to a database (.db) file. Kash will verify if the patch exists. If it doesn't, it will create a new database in the path provided. If one does exist, it will attemt to connect to it and check to see if it contains a table named `bank_activity` with the proper columns. If the connectin or check fails, the program will error out. 
-2. The path to a config file that maps out the columns the CSv file*
-3. The path to the non-Chase CSV file.
-```
-$ kash import /path/to/database.db /path/to/bank_config.ini /path/to/other_non-chase_bank_activity.csv
-```
-Just like with the `kash import-raw`, Kash will compare the incoming transactions against the transactions that exists in the database and print out a summary of all the new transactions.
+_For more examples, please refer to the [Documentation](https://example.com)_
 
-Similarly, Kash will only commit the inserts if the --commit flag is passed:
-```
-$ kash import /path/to/database.db /path/to/bank_config.ini /path/to/other_non-chase_bank_activity.csv --commit
-```
-*To learn about how to set up a config files to import non-Chase csv files, visit the documnetation which explains this in further detail.
-### The `kash get` subcommand
-Kash allows you to fetch specific results from stored queries using the `kash get` subcommand. It expects two positionsl arguments:
-1. The path to a configuration file that contains all the stored queries and their aliases.* 
-2. A space-delimited list of pre-defined aliases that have been mapped to SQL querues in the configuration file*
-```
-$ kash get /path/to/stored_queries.ini query_alias_1 query_alias_2 query_alias_3
-```
-*To learn about how to set up a config files to store queries and their aliases, visit the documnetation which explains this in further detail.
+<p align="right">(<a href="#readme-top">back to top</a>)</p>
+
+
+
+<!-- ROADMAP -->
+## Roadmap
+
+- [x] Add Changelog
+- [x] Add back to top links
+- [ ] Add Additional Templates w/ Examples
+- [ ] Add "components" document to easily copy & paste sections of the readme
+- [ ] Multi-language Support
+    - [ ] Chinese
+    - [ ] Spanish
+
+See the [open issues](https://github.com/irvingmp6/kash/issues) for a full list of proposed features (and known issues).
+
+<p align="right">(<a href="#readme-top">back to top</a>)</p>
+
+
+
+<!-- CONTRIBUTING -->
+## Contributing
+
+Contributions are what make the open source community such an amazing place to learn, inspire, and create. Any contributions you make are **greatly appreciated**.
+
+If you have a suggestion that would make this better, please fork the repo and create a pull request. You can also simply open an issue with the tag "enhancement".
+Don't forget to give the project a star! Thanks again!
+
+1. Fork the Project
+2. Create your Feature Branch (`git checkout -b feature/AmazingFeature`)
+3. Commit your Changes (`git commit -m 'Add some AmazingFeature'`)
+4. Push to the Branch (`git push origin feature/AmazingFeature`)
+5. Open a Pull Request
+
+<p align="right">(<a href="#readme-top">back to top</a>)</p>
+
+
+
+<!-- LICENSE -->
+## License
+
+Distributed under the MIT License. See `LICENSE.txt` for more information.
+
+<p align="right">(<a href="#readme-top">back to top</a>)</p>
+
+
+
+<!-- CONTACT -->
+## Contact
+
+Your Name - [@your_twitter](https://twitter.com/your_username) - email@example.com
+
+Project Link: [https://github.com/your_username/repo_name](https://github.com/your_username/repo_name)
+
+<p align="right">(<a href="#readme-top">back to top</a>)</p>
+
+
+
+<!-- ACKNOWLEDGMENTS -->
+## Acknowledgments
+
+Use this space to list resources you find helpful and would like to give credit to. I've included a few of my favorites to kick things off!
+
+* [Choose an Open Source License](https://choosealicense.com)
+* [GitHub Emoji Cheat Sheet](https://www.webpagefx.com/tools/emoji-cheat-sheet)
+* [Malven's Flexbox Cheatsheet](https://flexbox.malven.co/)
+* [Malven's Grid Cheatsheet](https://grid.malven.co/)
+* [Img Shields](https://shields.io)
+* [GitHub Pages](https://pages.github.com)
+* [Font Awesome](https://fontawesome.com)
+* [React Icons](https://react-icons.github.io/react-icons/search)
+
+<p align="right">(<a href="#readme-top">back to top</a>)</p>
+
+
+
+<!-- MARKDOWN LINKS & IMAGES -->
+<!-- https://www.markdownguide.org/basic-syntax/#reference-style-links -->
+[contributors-shield]: https://img.shields.io/github/contributors/irvingmp6/kash.svg?style=for-the-badge
+[contributors-url]: https://github.com/irvingmp6/kash/graphs/contributors
+[forks-shield]: https://img.shields.io/github/forks/irvingmp6/kash.svg?style=for-the-badge
+[forks-url]: https://github.com/irvingmp6/kash/network/members
+[stars-shield]: https://img.shields.io/github/stars/irvingmp6/kash.svg?style=for-the-badge
+[stars-url]: https://github.com/irvingmp6/kash/stargazers
+[issues-shield]: https://img.shields.io/github/issues/irvingmp6/kash.svg?style=for-the-badge
+[issues-url]: https://github.com/irvingmp6/kash/issues
+[license-shield]: https://img.shields.io/github/license/irvingmp6/kash.svg?style=for-the-badge
+[license-url]: https://github.com/irvingmp6/kash/blob/master/LICENSE.txt
+[linkedin-shield]: https://img.shields.io/badge/-LinkedIn-black.svg?style=for-the-badge&logo=linkedin&colorB=555
+[linkedin-url]: https://linkedin.com/in/irving-mtz
+[website-shield]: https://img.shields.io/badge/any_text-you_like-blue
+[website-url]: https://img.shields.io/badge/any_text-you_like-blue
+[product-screenshot]: images/screenshot.png
+[Next.js]: https://img.shields.io/badge/next.js-000000?style=for-the-badge&logo=nextdotjs&logoColor=white
+[Next-url]: https://nextjs.org/
