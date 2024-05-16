@@ -1,17 +1,51 @@
+import os
 import hashlib
 import argparse
 from datetime import datetime
-from distutils.util import strtobool
 
 import pandas
 
-from src.interface_funcs import DuplicateAliasError, BadQueryStructureError, UnknownAliasError
-from .user_settings import UserSettings, ImportParserUserSettings, GetQueryUserSettings
+from src.interface_funcs import (
+    DuplicateAliasError, 
+    BadQueryStructureError, 
+    UnknownAliasError, 
+    ConfigSectionIncompleteError
+)
+from .user_settings import (
+    UserSettings, 
+    ImportParserUserSettings, 
+    MakeImportReadyParserUserSettings, 
+    RunQueryParserUserSettings
+)
 
 # SQL queries
-select_transaction_ids_from_bank_activity_table = "SELECT transaction_id FROM bank_activity;"
-select_all_from_bank_activity_table = "SELECT * FROM bank_activity;"
-insert_into_bank_activity_table = """INSERT INTO bank_activity (Account_Alias, Transaction_ID, Details, Posting_Date, Description, Amount, Type, Balance, Check_or_Slip_num, Reconciled) VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?);"""
+SELECT_TRANSACTION_IDS_FROM_BANK_ACTIVITY_TABLE = \
+    "SELECT transaction_id FROM bank_activity;"
+INSERT_INTO_BANK_ACTIVITY_TABLE = \
+    """INSERT INTO bank_activity (Account_Alias, Transaction_ID, Details, Posting_Date, Description, Amount, Type, Balance, Check_or_Slip_num, Reconciled) VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?);"""
+INSERT_INTO_PENDING_TRANSACTIONS_TABLE = \
+    """INSERT INTO pending_transactions (Account_Alias, Transaction_ID, Details, Posting_Date, Description, Amount, Type, Balance, Check_or_Slip_num, Reconciled) VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?);"""
+
+# Chase column names to config keys map
+CHASE_COLUMN_CONFIG_NAME_MAP = {
+        "details" : "Details",
+        "posting_date" : "Posting Date",
+        "description" : "Description",
+        "amount" : "Amount",
+        "type" : "Type",
+        "balance" : "Balance",
+        "check_or_slip_number" : "Check or Slip #",
+        "extra_1" : "Extra 1"
+    }
+
+CHASE_COLUMN_NAMES = \
+    [CHASE_COLUMN_CONFIG_NAME_MAP[k] for k in CHASE_COLUMN_CONFIG_NAME_MAP.keys()]
+
+def strtobool(value: str) -> bool:
+  value = value.lower()
+  if value in ("y", "yes", "on", "1", "true", "t"):
+    return True
+  return False
 
 def format_date(date_str: str, raw_format: str, new_format: str) -> str:
     """
@@ -75,7 +109,8 @@ def print_bank_activity_dataframe(df: pandas.DataFrame) -> None:
             print(f"| {posting_date}|{amount}| {description} | {account_alias}|")
         print(f"+{small_column}+{small_column}+{large_column}+{small_column}+")
     else:
-        print("No transactions")
+        print("No new settled transactions")
+
 
 class Controller:
     """
@@ -119,26 +154,109 @@ class ImportParserController(Controller):
 
         This method retrieves new transactions from a CSV file and inserts them into the bank activity table.
         """
-        csv_file = self._user_settings.csv_file
         existing_transaction_ids = self._db_interface.get_existing_transaction_ids()
         csv_handler = CSVHandler(self._user_settings, existing_transaction_ids)
-        new_transactions_df = csv_handler.get_new_settled_transactions_df(csv_file)
+        new_transactions_df = csv_handler.get_new_settled_transactions_df()
         self._db_interface.insert_df_into_bank_activity_table(new_transactions_df)
         print_bank_activity_dataframe(new_transactions_df)
 
-class GetQueryParserController(Controller):
-    """
-    Controller for query operations.
-    """
+        pending_transactions_df = csv_handler.get_new_pending_transactions_df()
+        self._db_interface.insert_df_into_pending_transactions_table(pending_transactions_df)
+
+
+class MakeImportReadyParserController(Controller):
     def __init__(self, cli_args: argparse.Namespace) -> None:
         """
-        Initialize GetQueryParserController with user settings.
+        Initialize ImportParserController with user settings.
 
         Args:
             cli_args (argparse.Namespace): Command-line arguments.
         """
         super().__init__(cli_args)
-        self._user_settings = GetQueryUserSettings(cli_args)
+        self._user_settings = MakeImportReadyParserUserSettings(cli_args)
+        self.raw_csv_file = self._user_settings.raw_csv_file
+        self.conversion_config = self._user_settings.conversion_config
+
+    def start_process(self) -> None:
+        """
+        Start the conversion process.
+        """
+        new_file_path = self._get_new_filepath()
+        has_header_config_value = self.conversion_config["HEADER"]["has_header"].strip()
+        if strtobool(has_header_config_value):
+            raw_df = pandas.read_csv(self.raw_csv_file, header=None, skiprows=[0])
+        else:
+            raw_df = pandas.read_csv(self.raw_csv_file, header=None)
+        converted_df = self._convert_dataframe_to_chase_format(raw_df)
+        converted_df.to_csv(new_file_path, index=False)
+        print(new_file_path)
+
+    def _get_new_filepath(self):
+        """  
+        TODO: write docstring  
+        """  
+        path = os.path.dirname(self.raw_csv_file)
+        basename = os.path.basename(self.raw_csv_file)
+        filename, ext = os.path.splitext(basename)
+        new_filename = filename + "_import_ready" + ext
+        return os.path.join(path, new_filename).replace("\\", "/")
+
+    def _convert_dataframe_to_chase_format(self, df:pandas.DataFrame) -> pandas.DataFrame:
+        """
+        Convert DataFrame to Chase format.
+
+        Args:
+            df (pandas.DataFrame): DataFrame to be converted.
+
+        Returns:
+            pandas.DataFrame: DataFrame converted to Chase format.
+        """
+        # Calculate the number of rows in the DataFrame
+        count_row = df.shape[0]
+
+        # Create a list of empty strings with the same length as the DataFrame
+        empty_values = ["" for _ in range(count_row)]
+
+        # Insert empty columns with Chase column names to the DataFrame
+        for name in CHASE_COLUMN_NAMES:
+            df.insert(df.shape[1], name, empty_values, True)
+
+        try:
+            # Loop through the expected keys in the GENERAL section of the configuration
+            for key in CHASE_COLUMN_CONFIG_NAME_MAP.keys():
+                # Get the value associated with the key and strip any leading or trailing whitespace
+                value = self.conversion_config["GENERAL"][key].strip()
+                # Check if the value is not empty
+                if value:
+                    # Convert the value to an integer, representing the index of the original DataFrame
+                    index = int(value)
+                    # Map the column in the Chase format to the corresponding column in the original DataFrame
+                    df[CHASE_COLUMN_CONFIG_NAME_MAP[key]] = df[index]
+
+        except (ValueError, KeyError) as e:
+            # Handle missing or incorrect configuration for the GENERAL section
+            message = (f"{e}.\nTroubleshooting help: Ensure the GENERAL section contains the proper definitions"
+                    f" in the config file. Refer to the configs provided in src/test_files/ for help.")
+            raise ConfigSectionIncompleteError(message)
+
+        # Retain only the columns in the DataFrame that match Chase column names
+        df = df.loc[:, df.columns.intersection(CHASE_COLUMN_NAMES)]
+        return df
+
+
+class RunQueryParserController(Controller):
+    """
+    Controller for query operations.
+    """
+    def __init__(self, cli_args: argparse.Namespace) -> None:
+        """
+        Initialize RunQueryParserController with user settings.
+
+        Args:
+            cli_args (argparse.Namespace): Command-line arguments.
+        """
+        super().__init__(cli_args)
+        self._user_settings = RunQueryParserUserSettings(cli_args)
         self.queries_config = self._user_settings.queries_config
         self.call_query_map = self._create_query_alias_map()
         self.queries = self._get_queries()
@@ -149,48 +267,33 @@ class GetQueryParserController(Controller):
 
         This method executes predefined queries based on user input.
         """
-        try:
-            max_rows_to_display = self._get_max_rows_to_display()
-        except ValueError as ve:
-            raise ValueError(f"{ve} is not an acceptable value in [GENERAL] max_rows_to_display")
 
-        pandas.set_option('display.max_rows', max_rows_to_display)
-        self._execute_queries(max_rows_to_display)
+        self._execute_queries()
 
-    def _get_max_rows_to_display(self) -> int:
-        """
-        Retrieve the maximum number of rows to display from configuration.
-
-        Returns:
-            int: Maximum number of rows to display.
-        """
-        max_rows_to_display = self.queries_config.get("GENERAL", "max_rows_to_display", fallback=None)
-        return int(max_rows_to_display)
-
-    def _execute_queries(self, max_rows_to_display: int) -> None:
+    def _execute_queries(self) -> None:
         """
         Execute and display the results of predefined queries.
-
-        Args:
-            max_rows_to_display (int): Maximum number of rows to display.
         """
+        number_or_rows = self._user_settings.rows
         for query_call, query in self.queries:
             df = pandas.DataFrame(self._db_interface.execute_query(query))
-            self._display_query_results(query_call, df, max_rows_to_display)
+            self._display_query_results(query_call, df, number_or_rows)
             if self._user_settings.save_results:
-                self._save_query_results(query_call, df, max_rows_to_display)
+                self._save_query_results(query_call, df, number_or_rows)
 
-    def _display_query_results(self, query_call: str, df: pandas.DataFrame, max_rows_to_display: int) -> None:
+    def _display_query_results(self, query_call: str, df: pandas.DataFrame, number_or_rows: int) -> None:
         """
         Display the results of a query with formatting.
 
         Args:
             query_call (str): Query alias.
             df (pandas.DataFrame): DataFrame containing query results.
-            max_rows_to_display (int): Maximum number of rows to display.
+            number_or_rows (int): Maximum number of rows to display.
         """
+        data = False
         print(f'\n"{query_call}" results:')
-        for row_idx, row in df.head(max_rows_to_display).iterrows():
+        for row_idx, row in df.head(number_or_rows).iterrows():
+            data = True
             # Display border
             if row_idx == 0:
                 table_border = self._create_border(row)
@@ -199,9 +302,9 @@ class GetQueryParserController(Controller):
             # Display row
             self._display_row(row)
 
-            # Display boder
-            if row_idx == max_rows_to_display-1:
-                print(table_border)
+        # Display boder
+        if data:
+            print(table_border)
 
     def _create_border(self, row: pandas.Series) -> str:
         """
@@ -213,7 +316,7 @@ class GetQueryParserController(Controller):
         Returns:
             str: Formatted border string.
         """
-        max_length = 30  # Maximum length of each column value in characters
+        max_length = 50  # Maximum length of each column value in characters
         border_parts = ["-" * len("{: >15} ".format(str(row[col_idx])[:max_length])) for col_idx in range(len(row))]
         border_string = "+" + "+".join(border_parts) + "+"
         return border_string
@@ -225,7 +328,7 @@ class GetQueryParserController(Controller):
         Args:
             row (pandas.Series): Row of data from the DataFrame.
         """
-        formatted_columns = [self._format_value(str(row[col_idx])[:30]) for col_idx in range(len(row))]
+        formatted_columns = [self._format_value(str(row[col_idx])[:50]) for col_idx in range(len(row))]
         formatted_output = "|" + "|".join(formatted_columns) + "|"
         print(formatted_output)
 
@@ -241,17 +344,17 @@ class GetQueryParserController(Controller):
         """
         return "{: >15} ".format(value)
 
-    def _save_query_results(self, query_call: str, df: pandas.DataFrame, max_rows_to_display: int) -> None:
+    def _save_query_results(self, query_call: str, df: pandas.DataFrame, number_or_rows: int) -> None:
         """
         Save query results to a CSV file.
 
         Args:
             query_call (str): Query alias.
             df (pandas.DataFrame): DataFrame containing query results.
-            max_rows_to_display (int): Maximum number of rows to save.
+            number_or_rows (int): Maximum number of rows to save.
         """
         csv_file_name = f"{query_call}_results.csv"
-        df.head(max_rows_to_display).to_csv(csv_file_name)
+        df.head(number_or_rows).to_csv(csv_file_name)
 
     def _get_queries(self) -> list:
         """
@@ -329,7 +432,7 @@ class DataBaseInterface:
         Returns:
             list: List of existing transaction IDs.
         """
-        records = self._conn.execute(select_transaction_ids_from_bank_activity_table).fetchall()
+        records = self._conn.execute(SELECT_TRANSACTION_IDS_FROM_BANK_ACTIVITY_TABLE).fetchall()
         return [record[0] for record in records]
 
     def insert_df_into_bank_activity_table(self, df: pandas.DataFrame) -> None:
@@ -355,7 +458,37 @@ class DataBaseInterface:
             values = (account_alias, transaction_id, details, formatted_posting_date,
                       description, amount, type_, balance, check_or_slip_num, reconciled)
             if self._commit:
-                self._conn.execute(insert_into_bank_activity_table, values)
+                self._conn.execute(INSERT_INTO_BANK_ACTIVITY_TABLE, values)
+        if self._commit:
+            self._conn.commit()
+
+    def insert_df_into_pending_transactions_table(self, df: pandas.DataFrame) -> None:
+        """
+        Insert DataFrame into the bank activity table.
+
+        Args:
+            df (pandas.DataFrame): DataFrame to be inserted.
+        """
+        if self._commit:
+            self.delete_all_pending_transactions_table_records()    
+
+        df = df.reset_index()
+        for _, row in df.iterrows():
+            account_alias = row["Account Alias"]
+            transaction_id = row['Transaction ID']
+            details = row["Details"]
+            posting_date = row["Posting Date"]
+            formatted_posting_date = format_date(posting_date, "%m/%d/%Y", "%Y-%m-%d")
+            description = row["Description"]
+            amount = format_amount(row["Amount"])
+            type_ = row["Type"]
+            balance = row["Balance"]
+            check_or_slip_num = row["Check or Slip #"]
+            reconciled = 'N'
+            values = (account_alias, transaction_id, details, formatted_posting_date,
+                      description, amount, type_, balance, check_or_slip_num, reconciled)
+            if self._commit:
+                self._conn.execute(INSERT_INTO_PENDING_TRANSACTIONS_TABLE, values)
         if self._commit:
             self._conn.commit()
 
@@ -375,6 +508,22 @@ class DataBaseInterface:
             return self._conn.execute(query, args).fetchall()
         return self._conn.execute(query).fetchall()
 
+    def delete_all_pending_transactions_table_records(self) -> None:
+        """
+        deletes pending transactions table records.
+
+        Args:
+            None
+
+        Returns:
+            None
+        """
+        query = """
+            DELETE
+            FROM
+                pending_transactions;"""
+        self._conn.execute(query)
+
 
 class CSVHandler:
     """
@@ -382,21 +531,16 @@ class CSVHandler:
 
     Attributes:
         _user_settings (ImportParserUserSettings): User settings object.
-        _csv_file (list): List of CSV files.
-        _config (dict): Configuration settings.
+        _csv_file (str): "Import-ready" CSV filepath
         _account_alias (str): Account alias.
-        _chase_column_config_name_map (dict): Mapping of column names between Chase format and original format.
-        _chase_column_names (list): List of column names in Chase format.
         existing_transaction_ids (list): List of existing transaction IDs.
 
     Methods:
-        _get_chase_column_config_name_map(): Get mapping of column names between Chase format and original format.
-        _get_chase_column_names(): Get list of column names in Chase format.
         get_new_settled_transactions_df(csv_file: str) -> pandas.DataFrame: Get DataFrame of new settled transactions from CSV file.
         _create_dataframe_from_foreign_csv(csv_file: str): Create DataFrame from a foreign CSV file.
         _get_converters(csv_file: str): Get converters for reading CSV file.
         _convert_dataframe_to_chase_format(df: pandas.DataFrame): Convert DataFrame to Chase format.
-        _create_dataframe_from_chase_csv(csv_file: str): Create DataFrame from a Chase CSV file.
+        _create_dataframe_from_import_ready_csv(csv_file: str): Create DataFrame from a Chase CSV file.
         _add_required_columns_to_df(df: pandas.DataFrame) -> pandas.DataFrame: Add required columns to DataFrame.
     """
     def __init__(self, user_settings:ImportParserUserSettings, existing_transaction_ids:list) -> None:
@@ -409,57 +553,21 @@ class CSVHandler:
         """
         self._user_settings = user_settings
         self._csv_file = self._user_settings.csv_file
-        self._import_config = self._user_settings.import_config
         self._account_alias = self._user_settings.account_alias
-        self._chase_column_config_name_map = self._get_chase_column_config_name_map()
-        self._chase_column_names = self._get_chase_column_names()
         self.existing_transaction_ids = existing_transaction_ids
 
-    def _get_chase_column_config_name_map(self) -> dict:
+    def get_new_settled_transactions_df(self) -> pandas.DataFrame:
         """
-        Get mapping of column names between Chase format and original format.
-
-        Returns:
-            dict: Mapping of column names.
-        """
-        return {
-            "details" : "Details",
-            "posting_date" : "Posting Date",
-            "description" : "Description",
-            "amount" : "Amount",
-            "type" : "Type",
-            "balance" : "Balance",
-            "check_or_slip_number" : "Check or Slip #",
-            "extra_1" : "Extra 1"
-        }
-
-    def _get_chase_column_names(self) -> list:
-        """
-        Get list of column names in Chase format.
-
-        Returns:
-            list: List of column names.
-        """
-        return [self._chase_column_config_name_map[k]
-                for k in self._chase_column_config_name_map.keys()]
-
-    def get_new_settled_transactions_df(self, csv_file:str) -> pandas.DataFrame:
-        """
-        Get DataFrame of new settled transactions from CSV file.
+        Get DataFrame of new settled transactions from the imported CSV file.
 
         Args:
-            csv_file (str): Path to CSV file.
+            None
 
         Returns:
             pandas.DataFrame: DataFrame of new settled transactions.
         """
-        # Determine if a config was provided
-        if self._import_config:
-            # Create DataFrame from a foreign CSV file
-            csv_trans_df = self._create_dataframe_from_foreign_csv(csv_file)
-        else:
-            # Create DataFrame from a Chase CSV file
-            csv_trans_df = self._create_dataframe_from_chase_csv(csv_file)
+        # Create DataFrame from a Chase CSV file
+        csv_trans_df = self._create_dataframe_from_import_ready_csv(self._csv_file)
 
         # Filter out rows with empty balance
         csv_trans_df = csv_trans_df[csv_trans_df['Balance'] != ' ']
@@ -467,104 +575,28 @@ class CSVHandler:
         # Exclude transactions already present in the bank activity table
         return csv_trans_df[~csv_trans_df["Transaction ID"].isin(self.existing_transaction_ids)]
 
-    def _create_dataframe_from_foreign_csv(self, csv_file:str) -> pandas.DataFrame:
+    def get_new_pending_transactions_df(self) -> pandas.DataFrame:
         """
-        Create DataFrame from a foreign CSV file.
+        Get DataFrame of new pending transactions from the imported CSV file.
 
         Args:
-            csv_file (str): Path to CSV file.
+            None
 
         Returns:
-            pandas.DataFrame: DataFrame created from the CSV file.
+            pandas.DataFrame: DataFrame of new settled transactions.
         """
-        try:
-            # Extract whether the CSV file has a header from configuration
-            config_value = self._import_config["HEADER"].get("has_header")
-            csv_has_header_row = strtobool(config_value.strip())
-        except (KeyError, AttributeError, ValueError) as e:
-            # Handle missing or incorrect configuration for the has_
-            message = (f"{e}.\nTroubleshooting help: Ensure the has_ section contains the proper definitions"
-                    f" in the config file. Refer to the configs provided in src/test_files/ for help.")
-            raise ConfigSectionIncompleteError(message)
+        # Create DataFrame from a Chase CSV file
+        csv_trans_df = self._create_dataframe_from_import_ready_csv(self._csv_file)
 
-        converters = self._get_converters(csv_file)
+        # Return DataFrame with rows that contain empty balance
+        return csv_trans_df[csv_trans_df['Balance'] == ' ']
 
-        # Read the CSV file to DataFrame, considering header existence
-        if csv_has_header_row:
-            df = pandas.read_csv(csv_file, delimiter=",", header=None, converters=converters, skiprows=[0])
-        else:
-            df = pandas.read_csv(csv_file, delimiter=",", header=None, converters=converters)
-
-        # Convert DataFrame to Chase format
-        df = self._convert_dataframe_to_chase_format(df)
-
-        # Create ingestible DataFrame
-        return self._add_required_columns_to_df(df)
-
-    def _get_converters(self, csv_file:str) -> dict:
+    def _create_dataframe_from_import_ready_csv(self, import_ready_csv_file:str) -> pandas.DataFrame:
         """
-        Get converters for reading CSV file.
+        Create DataFrame from an "import-ready" CSV file.
 
         Args:
-            csv_file (str): Path to CSV file.
-
-        Returns:
-            dict: Dictionary of converters.
-        """
-        # Read the CSV file to a temporary DataFrame to determine the number of columns
-        temp_df = pandas.read_csv(csv_file, delimiter=",", header=None, skiprows=[0])
-
-        # Convert all columns to string datatype
-        return {i: str for i in range(temp_df.shape[1])}
-
-    def _convert_dataframe_to_chase_format(self, df:pandas.DataFrame) -> pandas.DataFrame:
-        """
-        Convert DataFrame to Chase format.
-
-        Args:
-            df (pandas.DataFrame): DataFrame to be converted.
-
-        Returns:
-            pandas.DataFrame: DataFrame converted to Chase format.
-        """
-        # Calculate the number of rows in the DataFrame
-        count_row = df.shape[0]
-
-        # Create a list of empty strings with the same length as the DataFrame
-        empty_values = ["" for _ in range(count_row)]
-
-        # Insert empty columns with Chase column names to the DataFrame
-        for name in self._chase_column_names:
-            df.insert(df.shape[1], name, empty_values, True)
-
-        try:
-            # Loop through the expected keys in the GENERAL section of the configuration
-            for key in self._chase_column_config_name_map.keys():
-                # Get the value associated with the key and strip any leading or trailing whitespace
-                value = self._import_config["GENERAL"][key].strip()
-                # Check if the value is not empty
-                if value:
-                    # Convert the value to an integer, representing the index of the original DataFrame
-                    index = int(value)
-                    # Map the column in the Chase format to the corresponding column in the original DataFrame
-                    df[self._chase_column_config_name_map[key]] = df[index]
-
-        except (ValueError, KeyError) as e:
-            # Handle missing or incorrect configuration for the GENERAL section
-            message = (f"{e}.\nTroubleshooting help: Ensure the GENERAL section contains the proper definitions"
-                    f" in the config file. Refer to the configs provided in src/test_files/ for help.")
-            raise ConfigSectionIncompleteError(message)
-
-        # Retain only the columns in the DataFrame that match Chase column names
-        df = df.loc[:, df.columns.intersection(self._chase_column_names)]
-        return df
-
-    def _create_dataframe_from_chase_csv(self, csv_file:str) -> pandas.DataFrame:
-        """
-        Create DataFrame from a Chase CSV file.
-
-        Args:
-            csv_file (str): Path to CSV file.
+            import_ready_csv_file (str): Path to "import-ready" CSV file.
 
         Returns:
             pandas.DataFrame: DataFrame created from the CSV file.
@@ -573,7 +605,7 @@ class CSVHandler:
         converters = {"Balance": str}
 
         # Read CSV file into DataFrame, skipping the first row (header) and specifying column names
-        df = pandas.read_csv(csv_file, delimiter=",", skiprows=[0], header=None, names=self._chase_column_names, \
+        df = pandas.read_csv(import_ready_csv_file, delimiter=",", skiprows=[0], header=None, names=CHASE_COLUMN_NAMES, \
                         converters=converters)
 
         # Add required columns to DataFrame
@@ -606,12 +638,12 @@ class CSVHandler:
         # Iterate over each row in the DataFrame
         for _, row in df.iterrows():
             # Extract relevant columns for generating transaction ID
-            details = row["Details"]
-            posting_date = row["Posting Date"]
-            description = row["Description"]
+            details = str(row["Details"])
+            posting_date = str(row["Posting Date"])
+            description = str(row["Description"])
             amount = str(row["Amount"])
-            type_ = row["Type"]
-            balance = row["Balance"]
+            type_ = str(row["Type"])
+            balance = str(row["Balance"])
             check_or_slip_num = str(row["Check or Slip #"])
 
             # Concatenate columns to create a hashable string

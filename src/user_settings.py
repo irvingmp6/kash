@@ -50,16 +50,25 @@ class ImportParserUserSettings(UserSettings):
         super().__init__(cli_args)
         self.csv_file = cli_args.csv_file  # Path to the CSV file
         self.account_alias = cli_args.account_alias  # Account alias for importing bank activity
-        self.import_config = self.get_config_object(cli_args.import_config) \
-            if hasattr(cli_args, 'import_config') else None  # ConfigParser object for import settings (used for non Chase CSV files)
 
+class MakeImportReadyParserUserSettings(UserSettings):
+    def __init__(self, cli_args: argparse.Namespace) -> None:
+        """
+        Initialize MakeImportReadyUserSettings with command-line arguments.
 
-class GetQueryUserSettings(UserSettings):
+        Args:
+            cli_args (argparse.Namespace): Command-line arguments parsed by argparse.
+        """
+        super().__init__(cli_args)
+        self.raw_csv_file = cli_args.raw_csv_file  # Path to the raw CSV file
+        self.conversion_config = self.get_config_object(cli_args.conversion_config)
+
+class RunQueryParserUserSettings(UserSettings):
     """Class for managing user settings related to query operations."""
 
     def __init__(self, cli_args: argparse.Namespace) -> None:
         """
-        Initialize GetQueryUserSettings with command-line arguments.
+        Initialize RunQueryUserSettings with command-line arguments.
 
         Args:
             cli_args (argparse.Namespace): Command-line arguments parsed by argparse.
@@ -69,3 +78,4 @@ class GetQueryUserSettings(UserSettings):
         self.queries_config = self.get_config_object(self.queries_config_path)  # ConfigParser object for queries configuration file
         self.query_calls = cli_args.query_calls  # Lis of query calls to execute
         self.save_results = cli_args.save_results
+        self.rows = cli_args.rows

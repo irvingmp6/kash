@@ -58,6 +58,33 @@ def check_bank_activity_table_exists(conn: sqlite3.Connection) -> None:
             bank_activity;"""
     conn.execute(query)
 
+def create_pending_transactions_table(conn: sqlite3.Connection) -> None:
+    """
+    Create the pending transactions table in the SQLite database.
+
+    Args:
+        conn (sqlite3.Connection): SQLite database connection.
+
+    Returns:
+        None
+    """
+    query = """
+        CREATE TABLE
+            pending_transactions(
+                ID INTEGER PRIMARY KEY,
+                Account_Alias,
+                Transaction_ID,
+                Details,
+                Posting_Date,
+                Description,
+                Amount,
+                Type,
+                Balance,
+                Check_or_Slip_num,
+                Reconciled,
+                Timestamp DATETIME DEFAULT CURRENT_TIMESTAMP
+            );"""
+    conn.execute(query)
 
 def db_connection(path: str) -> sqlite3.Connection:
     """
@@ -87,6 +114,7 @@ def db_connection(path: str) -> sqlite3.Connection:
     try:
         if new_db:
             create_bank_activity_table(con)
+            create_pending_transactions_table(con)
             print(f"Created new DB:\n{filepath}")
         else:
             check_bank_activity_table_exists(con)

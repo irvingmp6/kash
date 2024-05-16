@@ -4,6 +4,9 @@
 [![MIT License][license-shield]][license-url]
 [![LinkedIn][linkedin-shield]][linkedin-url]
 [![Website][website-shield]][website-url]
+[![Tests][tests-shield]][tests-url]
+
+
 
 
 <!-- PROJECT LOGO -->
@@ -27,7 +30,7 @@
 </div>
 
 
-
+<!-- TODO: Fix Table of Contents -->
 <!-- TABLE OF CONTENTS -->
 <details>
   <summary>Table of Contents</summary>
@@ -51,25 +54,24 @@
     <li><a href="#acknowledgments">Acknowledgments</a></li>
   </ol>
 </details>
-
-
-
+<p></p>
 
 <!-- ABOUT THE PROJECT -->
+[![Product Name Screen Shot][product-screenshot]](https://github.com/irvingmp6/kash)
 ## About The Project
+Introducing **Kash**, the ultimate budgeting framework designed to streamline your financial management. With Kash, you get two powerful tools that work together to help you take control of your finances.
 
-[![Product Name Screen Shot][product-screenshot]](https://example.com)
+### Console App
 
-There are many great personal finance tools on the internet; however, I didn't find one that really suited my needs so I created this little project that I want to share with you.
+The console app serves as your financial command center, allowing you to import transactions from all of your bank accounts into a dedicated database. It's designed for speed and simplicity, so you can quickly bring in new data without hassle. Once your transactions are imported, the console app lets you search and display specific records effortlessly, helping you identify key details about your expenses, like what you spent, when, and where. This feature is invaluable for tracking trends, spotting unusual charges, and staying on top of your financial health.
 
-Kash is a framework that allows you to better manage your financials. The framework consists of:
-* A console app to consolidate and query your bank activity
-* A pre-built Excel workbook template that contains all the ability to perform an accurate daily forecast of your financials for up to 3 months into the future
+### Dashboard
 
-Here's why:
-* We're human. We do human things like accidentally spend the money that was meant for the electric bill. 
-* Your time is precious. We all know we should budget but no one has the time to scroll through their bank statements or to create complex formulas in an Excel spreadsheet.
-* Unfortunately, a lot of personal finance tools fail to give you the financial insights that really tell you where you stand on a day-to-day basis.
+Kash also includes a comprehensive dashboard, offering a visual approach to managing your expenses. This interactive tool provides a clear overview of your income and expected spending patterns. It lets you define upcoming expenses and set budget limits. The dashboard goes a step further by providing a 90-day cash flow forecast, giving you a predictive edge in managing your money. With this insight, you can make informed decisions about upcoming expenses and ensure you're on track to meet your financial goals.
+
+### Why Kash?
+
+With Kash, you get a complete framework designed to help you manage your budget effectively and plan for the future. Whether you're looking to stay on top of everyday expenses or forecast your cash flow, Kash has the tools you need. It's simple to use, efficient, and offers a clear path to financial control. Start using Kash today and experience the peace of mind that comes with having a well-managed budget.
 
 This repository comes with all you need right out of the box. You just focus on the easy stuff.
 
@@ -77,13 +79,13 @@ This repository comes with all you need right out of the box. You just focus on 
 
 ### Built With
 
-The console app was developed using Python 3.12. It uses *Pandas* and *SQLite* to do the heavy lifting.
+The console app was developed using Python 3.12. It uses *Pandas* and *SQLite3* to do the heavy lifting.
 
 * ![Python](https://img.shields.io/badge/python-3670A0?style=for-the-badge&logo=python&logoColor=ffdd54)
 * ![Pandas](https://img.shields.io/badge/pandas-%23150458.svg?style=for-the-badge&logo=pandas&logoColor=white)
 * ![SQLite](https://img.shields.io/badge/sqlite-%2307405e.svg?style=for-the-badge&logo=sqlite&logoColor=white)
 
-The pre-built workbook template was created using Excel.
+The Dashboard is a pre-built workbook template created using sophisticated formulas in Excel.
 * ![Microsoft Excel](https://img.shields.io/badge/Microsoft_Excel-217346?style=for-the-badge&logo=microsoft-excel&logoColor=white)
 
 <p align="right">(<a href="#readme-top">back to top</a>)</p>
@@ -98,13 +100,13 @@ The pre-built workbook template was created using Excel.
 The installation process is fairly simple. There are just a couple prerequisites you want to make sure you have. 
 
 ### Prerequisites
-* [Python 3.12](https://www.python.org/downloads/release/python-3123/)
-* [Basic SQL knowledge](https://www.w3schools.com/sql/default.asp) (to set up your custom queries)
+* Python 3.12 - Click [HERE](https://www.python.org/downloads/release/python-3123/) to download
+* Basic SQL knowledge (to set up your custom queries) - Click [HERE](https://www.w3schools.com/sql/default.asp) to learn SQL
 
 ### Installation
 Once you have Python 3.12 set up, you have the option of setting up a virtual environment.
 #### (Optional) Setting up a Python Virtual Environment
-To avoid updating current packages on your global python set up, it's always good practice to isolate any new package dependencies with a virtual environment.
+To avoid updating current packages on your global python set up (and possibly messing up the dependencies for other packages), it's always good practice to isolate any new package dependencies with a virtual environment.
 
 **Create** a new Python virtual environment. I'm calling mine `kashEnv`.
 ```
@@ -119,13 +121,13 @@ $ source kashEnv/Scripts/activate
 $ source kashEnv/bin/activate
 ```
 #### Installing the package
-To install the package, follow tehese steps.
+To install the package, follow these steps.
 
 **Download** the repository
 ```
 $ git clone git@github.com:irvingmp6/kash.git
 ```
-Once you have the code downloaded, **install** Kash.
+**Install** Kash.
 ```
 $ python -m pip install -e ./kash
 ```
@@ -136,14 +138,79 @@ $ python -m pip install -e ./kash
 
 <!-- USAGE EXAMPLES -->
 ## Usage
+Kash allows you to import your bank activity into a database through the `import` subcommand. 
 
-Use this space to show useful examples of how a project can be used. Additional screenshots, code examples and demos work well in this space. You may also link to more resources.
+However, there's a small caveat: Not all bank activity downloaded are created equal. Only CSV files from Chase.com are "import-ready". In other words, only Chase bank activity CSV files are ready to be imported. CSV files from other banks need to be preprocessed so that they are made "import-ready" through the `make-import-ready` subcommand. This will reformat the non-Chase CSV files and make the data ready for import.
 
-_For more examples, please refer to the [Documentation](https://example.com)_
+### Downloading Bank Activity
+Most banks allow you to download your transaction history from their website when you log into your account. 
+
+#### Downloading transaction history from a Chase bank account
+1. Login to your [Chase](https://secure.chase.com/web/auth/dashboard#/dashboard/index/index) account.
+2. Choose a bank account.
+3. Click on the download icon under Transactions. This will take you to a "Download account activity" page.
+4. Leave the default settings: 
+* **Account**: The account you selected
+* **File type**: Spreadsheet (Excel, CSV)
+* **Activity**: Current display, including filters
+5. Click "Download"
+
+#### Downloading transaction history from a Non-Chase bank account
+1. Login to your bank's website.
+2. Select an account.
+3. Look for a download transactions button and click on it.
+4. Definte a date range (if prompted).
+5. Download the transactions as a CSV file.
+
+### Importing your bank transactions into a database
+The `import` subcommand is used to import "import-ready" CSV files into a database.
+
+`$ kash import /path/to/your_database.db /path/to/bank_activity.csv`
+
+It expects two positional arguments:
+1. The path to a database (.db) file.
+2. The path to a import-ready CSV file. 
+
+Kash automatically sets up a new SQLite database at the database file location when you run the `import` subcommand for the first time.
+
+### Making a CSV file import-ready
+As mentiond before, CSV files downloaded from Chase.com are already "import-ready". However, CSV files from non-chase banks need to be preprocessed using the `make-import-ready` subcommand:
+
+`$ kash make-import-ready /path/to/database.db /path/to/make_ready_config.ini /path/to/non_chase_bank_activity.csv`
+
+This command will create a new file with the phrase "import_ready_" prepended to its filename in the same location. This new file constains the same data as the original file, the only difference being the columns are rearranged so that the file can be properly imported.
+
+Output: `import_ready_non_chase_bank_activity.csv`
+
+This new, reformatted file is now ready for import:
+
+`$ kash import /path/to/your_database.db import_ready_non_chase_bank_activity.csv`
+
+### Pulling Data from the Database
+Kash allows users to run pre-defined queries in a config file using the `get` subcommand.
+
+`$ kash run-query /path/to/your_database.db /path/to/predefined_queries.ini query-alias_1`
+
+or
+
+`$ kash run-query /path/to/your_database.db /path/to/predefined_queries.ini query-alias_1 query-alias_2`
+
+or 
+
+`$ kash run-query /path/to/your_database.db /path/to/predefined_queries.ini query-alias_1 query-alias_2 query-alias_3`
+
+The expects two positionsl arguments:
+1. The path to a database (.db) file. 
+2. The path to a configuration file that contains all the stored queries and their aliases.
+3. A space-delimited list of pre-defined query aliases that have been mapped to SQL queries in the configuration file. The 3 examples above illustrates the ability to call a single query, 2 queries, and 3 queries, respectively. However, you can call as many queries as you'd like.
+
+The run-query will only display 1 row per query. To control the number of rows to display, simply use the `--rows` or `-r` option:
+
+`$ kash run-query /path/to/your_database.db /path/to/predefined_queries.ini query-alias_1 --rows 3`
+
+To learn about how to use Kash, please visit the [documnetation](https://irvingmp6.github.io/kash/) where all of these features are explained with more detail. The documentation also includes a [tutorial](https://irvingmp6.github.io/kash/) to help you get started.
 
 <p align="right">(<a href="#readme-top">back to top</a>)</p>
-
-
 
 <!-- ROADMAP -->
 ## Roadmap
@@ -158,6 +225,7 @@ _For more examples, please refer to the [Documentation](https://example.com)_
     - [ ] "Querying Bank Transactions"
     - [ ] "Forecasting"
     - [ ] "Tutorial"
+- [ ] Add new subcommand `trend` to find spending trends
 
 See the [open issues](https://github.com/irvingmp6/kash/issues) for a full list of proposed features (and known issues).
 
@@ -218,8 +286,8 @@ Project Link: [https://github.com/irvingmp6/kash](https://github.com/irvingmp6/k
 [license-url]: https://github.com/irvingmp6/kash/blob/master/LICENSE.txt
 [linkedin-shield]: https://img.shields.io/badge/-LinkedIn-black.svg?style=for-the-badge&logo=linkedin&colorB=555
 [linkedin-url]: https://linkedin.com/in/irving-mtz
-[website-shield]: https://img.shields.io/badge/website-blue
-[website-url]: https://img.shields.io/badge/any_text-you_like-blue
-[product-screenshot]: images/screenshot.png
-[Next.js]: https://img.shields.io/badge/next.js-000000?style=for-the-badge&logo=nextdotjs&logoColor=white
-[Next-url]: https://nextjs.org/
+[product-screenshot]: docs/images/kash_screenshot.png
+[tests-shield]: https://img.shields.io/badge/test_coverage-100%-349914
+[tests-url]: https://github.com/irvingmp6/kash/tree/master/tests
+[website-shield]: https://img.shields.io/badge/developer-irving--martinez.com-blue
+[website-url]: https://irving-martinez.com
