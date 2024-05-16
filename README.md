@@ -176,15 +176,15 @@ Kash automatically sets up a new SQLite database at the database file location w
 ### Making a CSV file import-ready
 As mentiond before, CSV files downloaded from Chase.com are already "import-ready". However, CSV files from non-chase banks need to be preprocessed using the `make-import-ready` subcommand:
 
-`$ kash make-import-ready /path/to/database.db /path/to/make_ready_config.ini /path/to/non_chase_bank_activity.csv`
+`$ kash make-import-ready /path/to/database.db /path/to/non_chase_bank_activity.csv /path/to/make_import_ready_config.ini`
 
-This command will create a new file with the phrase "import_ready_" prepended to its filename in the same location. This new file constains the same data as the original file, the only difference being the columns are rearranged so that the file can be properly imported.
+This command will create a new file with the phrase "_import_ready" append to its filename in the same location. This new file constains the same data as the original file, the only difference being the columns are rearranged so that the file can be properly imported.
 
-Output: `import_ready_non_chase_bank_activity.csv`
+Output: `non_chase_bank_activity_import_ready.csv`
 
 This new, reformatted file is now ready for import:
 
-`$ kash import /path/to/your_database.db import_ready_non_chase_bank_activity.csv`
+`$ kash import /path/to/your_database.db non_chase_bank_activity_import_ready.csv`
 
 ### Pulling Data from the Database
 Kash allows users to run pre-defined queries in a config file using the `get` subcommand.
