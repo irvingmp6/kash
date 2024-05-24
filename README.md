@@ -4,9 +4,6 @@
 [![MIT License][license-shield]][license-url]
 [![LinkedIn][linkedin-shield]][linkedin-url]
 [![Website][website-shield]][website-url]
-[![Tests][tests-shield]][tests-url]
-
-
 
 
 <!-- PROJECT LOGO -->
@@ -30,7 +27,6 @@
 </div>
 
 
-<!-- TODO: Fix Table of Contents -->
 <!-- TABLE OF CONTENTS -->
 <details>
   <summary>Table of Contents</summary>
@@ -51,7 +47,6 @@
     <li><a href="#usage">Usage</a></li>
     <li><a href="#license">License</a></li>
     <li><a href="#contact">Contact</a></li>
-    <li><a href="#acknowledgments">Acknowledgments</a></li>
   </ol>
 </details>
 <p></p>

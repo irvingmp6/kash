@@ -1,13 +1,14 @@
-import os
-import hashlib
 import argparse
+import hashlib
+import os
+import re
 from datetime import datetime
 
 import pandas
 
 from src.interface_funcs import (
     DuplicateAliasError, 
-    BadQueryStructureError, 
+    IllegalStructureError, 
     UnknownAliasError, 
     ConfigSectionIncompleteError
 )
@@ -15,7 +16,8 @@ from .user_settings import (
     UserSettings, 
     ImportParserUserSettings, 
     MakeImportReadyParserUserSettings, 
-    RunQueryParserUserSettings
+    RunQueryParserUserSettings,
+    TrendsParserUserSettings
 )
 
 # SQL queries
@@ -41,11 +43,13 @@ CHASE_COLUMN_CONFIG_NAME_MAP = {
 CHASE_COLUMN_NAMES = \
     [CHASE_COLUMN_CONFIG_NAME_MAP[k] for k in CHASE_COLUMN_CONFIG_NAME_MAP.keys()]
 
+
 def strtobool(value: str) -> bool:
   value = value.lower()
   if value in ("y", "yes", "on", "1", "true", "t"):
     return True
   return False
+
 
 def format_date(date_str: str, raw_format: str, new_format: str) -> str:
     """
@@ -62,6 +66,7 @@ def format_date(date_str: str, raw_format: str, new_format: str) -> str:
     date_obj = datetime.strptime(date_str, raw_format)
     return date_obj.strftime(new_format)
 
+
 def format_amount(amount) -> float:
     """
     Convert amount to a float value.
@@ -77,6 +82,7 @@ def format_amount(amount) -> float:
         if amount[0] == "(" and amount[-1] == ")":
             amount = "-" + amount[1:-1]
     return float(amount)
+
 
 def print_bank_activity_dataframe(df: pandas.DataFrame) -> None:
     """
@@ -112,6 +118,13 @@ def print_bank_activity_dataframe(df: pandas.DataFrame) -> None:
         print("No new settled transactions")
 
 
+def clean_up_config_value(value: str) -> str:
+    value = value.strip()
+    if (value.startswith('"') and value.endswith('"')) \
+    or (value.startswith("'") and value.endswith("'")):
+        value = value[1:-1]
+    return value
+
 class Controller:
     """
     Base class for controllers.
@@ -134,281 +147,6 @@ class Controller:
         """
         raise NotImplementedError
 
-class ImportParserController(Controller):
-    """
-    Controller for import operations.
-    """
-    def __init__(self, cli_args: argparse.Namespace) -> None:
-        """
-        Initialize ImportParserController with user settings.
-
-        Args:
-            cli_args (argparse.Namespace): Command-line arguments.
-        """
-        super().__init__(cli_args)
-        self._user_settings = ImportParserUserSettings(cli_args)
-
-    def start_process(self) -> None:
-        """
-        Start the import process.
-
-        This method retrieves new transactions from a CSV file and inserts them into the bank activity table.
-        """
-        existing_transaction_ids = self._db_interface.get_existing_transaction_ids()
-        csv_handler = CSVHandler(self._user_settings, existing_transaction_ids)
-        new_transactions_df = csv_handler.get_new_settled_transactions_df()
-        self._db_interface.insert_df_into_bank_activity_table(new_transactions_df)
-        print_bank_activity_dataframe(new_transactions_df)
-
-        pending_transactions_df = csv_handler.get_new_pending_transactions_df()
-        self._db_interface.insert_df_into_pending_transactions_table(pending_transactions_df)
-
-
-class MakeImportReadyParserController(Controller):
-    def __init__(self, cli_args: argparse.Namespace) -> None:
-        """
-        Initialize ImportParserController with user settings.
-
-        Args:
-            cli_args (argparse.Namespace): Command-line arguments.
-        """
-        super().__init__(cli_args)
-        self._user_settings = MakeImportReadyParserUserSettings(cli_args)
-        self.raw_csv_file = self._user_settings.raw_csv_file
-        self.conversion_config = self._user_settings.conversion_config
-
-    def start_process(self) -> None:
-        """
-        Start the conversion process.
-        """
-        new_file_path = self._get_new_filepath()
-        has_header_config_value = self.conversion_config["HEADER"]["has_header"].strip()
-        if strtobool(has_header_config_value):
-            raw_df = pandas.read_csv(self.raw_csv_file, header=None, skiprows=[0])
-        else:
-            raw_df = pandas.read_csv(self.raw_csv_file, header=None)
-        converted_df = self._convert_dataframe_to_chase_format(raw_df)
-        converted_df.to_csv(new_file_path, index=False)
-        print(new_file_path)
-
-    def _get_new_filepath(self):
-        """  
-        TODO: write docstring  
-        """  
-        path = os.path.dirname(self.raw_csv_file)
-        basename = os.path.basename(self.raw_csv_file)
-        filename, ext = os.path.splitext(basename)
-        new_filename = filename + "_import_ready" + ext
-        return os.path.join(path, new_filename).replace("\\", "/")
-
-    def _convert_dataframe_to_chase_format(self, df:pandas.DataFrame) -> pandas.DataFrame:
-        """
-        Convert DataFrame to Chase format.
-
-        Args:
-            df (pandas.DataFrame): DataFrame to be converted.
-
-        Returns:
-            pandas.DataFrame: DataFrame converted to Chase format.
-        """
-        # Calculate the number of rows in the DataFrame
-        count_row = df.shape[0]
-
-        # Create a list of empty strings with the same length as the DataFrame
-        empty_values = ["" for _ in range(count_row)]
-
-        # Insert empty columns with Chase column names to the DataFrame
-        for name in CHASE_COLUMN_NAMES:
-            df.insert(df.shape[1], name, empty_values, True)
-
-        try:
-            # Loop through the expected keys in the GENERAL section of the configuration
-            for key in CHASE_COLUMN_CONFIG_NAME_MAP.keys():
-                # Get the value associated with the key and strip any leading or trailing whitespace
-                value = self.conversion_config["GENERAL"][key].strip()
-                # Check if the value is not empty
-                if value:
-                    # Convert the value to an integer, representing the index of the original DataFrame
-                    index = int(value)
-                    # Map the column in the Chase format to the corresponding column in the original DataFrame
-                    df[CHASE_COLUMN_CONFIG_NAME_MAP[key]] = df[index]
-
-        except (ValueError, KeyError) as e:
-            # Handle missing or incorrect configuration for the GENERAL section
-            message = (f"{e}.\nTroubleshooting help: Ensure the GENERAL section contains the proper definitions"
-                    f" in the config file. Refer to the configs provided in src/test_files/ for help.")
-            raise ConfigSectionIncompleteError(message)
-
-        # Retain only the columns in the DataFrame that match Chase column names
-        df = df.loc[:, df.columns.intersection(CHASE_COLUMN_NAMES)]
-        return df
-
-
-class RunQueryParserController(Controller):
-    """
-    Controller for query operations.
-    """
-    def __init__(self, cli_args: argparse.Namespace) -> None:
-        """
-        Initialize RunQueryParserController with user settings.
-
-        Args:
-            cli_args (argparse.Namespace): Command-line arguments.
-        """
-        super().__init__(cli_args)
-        self._user_settings = RunQueryParserUserSettings(cli_args)
-        self.queries_config = self._user_settings.queries_config
-        self.call_query_map = self._create_query_alias_map()
-        self.queries = self._get_queries()
-
-    def start_process(self) -> None:
-        """
-        Start the query process.
-
-        This method executes predefined queries based on user input.
-        """
-
-        self._execute_queries()
-
-    def _execute_queries(self) -> None:
-        """
-        Execute and display the results of predefined queries.
-        """
-        number_or_rows = self._user_settings.rows
-        for query_call, query in self.queries:
-            df = pandas.DataFrame(self._db_interface.execute_query(query))
-            self._display_query_results(query_call, df, number_or_rows)
-            if self._user_settings.save_results:
-                self._save_query_results(query_call, df, number_or_rows)
-
-    def _display_query_results(self, query_call: str, df: pandas.DataFrame, number_or_rows: int) -> None:
-        """
-        Display the results of a query with formatting.
-
-        Args:
-            query_call (str): Query alias.
-            df (pandas.DataFrame): DataFrame containing query results.
-            number_or_rows (int): Maximum number of rows to display.
-        """
-        data = False
-        print(f'\n"{query_call}" results:')
-        for row_idx, row in df.head(number_or_rows).iterrows():
-            data = True
-            # Display border
-            if row_idx == 0:
-                table_border = self._create_border(row)
-                print(table_border)
-
-            # Display row
-            self._display_row(row)
-
-        # Display boder
-        if data:
-            print(table_border)
-
-    def _create_border(self, row: pandas.Series) -> str:
-        """
-        Create a formatted border string for a given row of data.
-
-        Args:
-            row (pandas.Series): Row of data.
-
-        Returns:
-            str: Formatted border string.
-        """
-        max_length = 50  # Maximum length of each column value in characters
-        border_parts = ["-" * len("{: >15} ".format(str(row[col_idx])[:max_length])) for col_idx in range(len(row))]
-        border_string = "+" + "+".join(border_parts) + "+"
-        return border_string
-
-    def _display_row(self, row: pandas.Series) -> None:
-        """
-        Display a formatted row of data.
-
-        Args:
-            row (pandas.Series): Row of data from the DataFrame.
-        """
-        formatted_columns = [self._format_value(str(row[col_idx])[:50]) for col_idx in range(len(row))]
-        formatted_output = "|" + "|".join(formatted_columns) + "|"
-        print(formatted_output)
-
-    def _format_value(self, value: str) -> str:
-        """
-        Format a value to a fixed length.
-
-        Args:
-            value (str): Input value.
-
-        Returns:
-            str: Formatted value.
-        """
-        return "{: >15} ".format(value)
-
-    def _save_query_results(self, query_call: str, df: pandas.DataFrame, number_or_rows: int) -> None:
-        """
-        Save query results to a CSV file.
-
-        Args:
-            query_call (str): Query alias.
-            df (pandas.DataFrame): DataFrame containing query results.
-            number_or_rows (int): Maximum number of rows to save.
-        """
-        csv_file_name = f"{query_call}_results.csv"
-        df.head(number_or_rows).to_csv(csv_file_name)
-
-    def _get_queries(self) -> list:
-        """
-        Retrieve and validate user queries.
-
-        Returns:
-            list: List of validated queries.
-        """
-        return [(query_call, self._validate_query(query_call)) for query_call in self._user_settings.query_calls]
-
-    def _validate_query(self, query:str) -> str:
-        """
-        Validate user query.
-
-        Args:
-            query (str): User-provided query.
-
-        Raises:
-            UnknownAliasError: If the query alias is unknown.
-            BadQueryStructureError: If the query structure is invalid.
-
-        Returns:
-            str: Validated query.
-        """
-        try:
-            query = self.call_query_map[query]
-            if "UPDATE" in query.upper() or "DELETE" in query.upper() or "DROP" in query.upper():
-                raise BadQueryStructureError(f"The query contains illegal words: {query}")
-        except KeyError:
-            raise UnknownAliasError(f"{query}: alias does not exist")
-        return query.strip('"""')
-
-    def _create_query_alias_map(self) -> dict:
-        """
-        Create a map of query aliases to their corresponding SQL queries.
-
-        Raises:
-            KeyError: If an alias is defined to a key that doesn't exist in QUERIES.
-
-        Returns:
-            dict: Mapping of query aliases to SQL queries.
-        """
-        query_alias_map = {}
-        for key in self.queries_config["ALIASES"]:
-            for value in self.queries_config["ALIASES"][key].strip().split(","):
-                alias = value.strip()
-                if alias not in query_alias_map.keys():
-                    try:
-                        query_alias_map[alias] = self.queries_config.get("QUERIES", key, raw=True)
-                    except KeyError:
-                        raise KeyError(f"Alias defined to a key that doesn't exist in QUERIES in: {self._user_settings.queries_config_path}")
-                else:
-                    raise DuplicateAliasError(f"{alias}: Alias is used multiple times in [ALIASES]: {self._user_settings.queries_config_path}")
-        return query_alias_map
 
 class DataBaseInterface:
     """
@@ -662,3 +400,347 @@ class CSVHandler:
         df.insert(0, "Transaction ID", transaction_ids, True)
         df.insert(1, "Account Alias", account_aliases, True)
         return df
+
+
+class ImportParserController(Controller):
+    """
+    Controller for import operations.
+    """
+    def __init__(self, cli_args: argparse.Namespace) -> None:
+        """
+        Initialize ImportParserController with user settings.
+
+        Args:
+            cli_args (argparse.Namespace): Command-line arguments.
+        """
+        super().__init__(cli_args)
+        self._user_settings = ImportParserUserSettings(cli_args)
+
+    def start_process(self) -> None:
+        """
+        Start the import process.
+
+        This method retrieves new transactions from a CSV file and inserts them into the bank activity table.
+        """
+        existing_transaction_ids = self._db_interface.get_existing_transaction_ids()
+        csv_handler = CSVHandler(self._user_settings, existing_transaction_ids)
+        new_transactions_df = csv_handler.get_new_settled_transactions_df()
+        self._db_interface.insert_df_into_bank_activity_table(new_transactions_df)
+        print_bank_activity_dataframe(new_transactions_df)
+
+        pending_transactions_df = csv_handler.get_new_pending_transactions_df()
+        self._db_interface.insert_df_into_pending_transactions_table(pending_transactions_df)
+
+
+class MakeImportReadyParserController(Controller):
+    def __init__(self, cli_args: argparse.Namespace) -> None:
+        """
+        Initialize ImportParserController with user settings.
+
+        Args:
+            cli_args (argparse.Namespace): Command-line arguments.
+        """
+        super().__init__(cli_args)
+        self._user_settings = MakeImportReadyParserUserSettings(cli_args)
+        self.raw_csv_file = self._user_settings.raw_csv_file
+        self.conversion_config = self._user_settings.conversion_config
+
+    def start_process(self) -> None:
+        """
+        Start the conversion process.
+        """
+        new_file_path = self._get_new_filepath()
+        has_header_config_value = clean_up_config_value(self.conversion_config["HEADER"]["has_header"])
+        if strtobool(has_header_config_value):
+            raw_df = pandas.read_csv(self.raw_csv_file, header=None, skiprows=[0])
+        else:
+            raw_df = pandas.read_csv(self.raw_csv_file, header=None)
+        converted_df = self._convert_dataframe_to_chase_format(raw_df)
+        converted_df.to_csv(new_file_path, index=False)
+        print(new_file_path)
+
+    def _get_new_filepath(self):
+        """  
+        TODO: write docstring  
+        """  
+        path = os.path.dirname(self.raw_csv_file)
+        basename = os.path.basename(self.raw_csv_file)
+        filename, ext = os.path.splitext(basename)
+        new_filename = filename + "_import_ready" + ext
+        return os.path.join(path, new_filename).replace("\\", "/")
+
+    def _convert_dataframe_to_chase_format(self, df:pandas.DataFrame) -> pandas.DataFrame:
+        """
+        Convert DataFrame to Chase format.
+
+        Args:
+            df (pandas.DataFrame): DataFrame to be converted.
+
+        Returns:
+            pandas.DataFrame: DataFrame converted to Chase format.
+        """
+        # Calculate the number of rows in the DataFrame
+        count_row = df.shape[0]
+
+        # Create a list of empty strings with the same length as the DataFrame
+        empty_values = ["" for _ in range(count_row)]
+
+        # Insert empty columns with Chase column names to the DataFrame
+        for name in CHASE_COLUMN_NAMES:
+            df.insert(df.shape[1], name, empty_values, True)
+
+        try:
+            # Loop through the expected keys in the GENERAL section of the configuration
+            for key in CHASE_COLUMN_CONFIG_NAME_MAP.keys():
+                # Get the value associated with the key and strip any leading or trailing whitespace
+                value = clean_up_config_value(self.conversion_config["GENERAL"][key])
+                # Check if the value is not empty
+                if value:
+                    # Convert the value to an integer, representing the index of the original DataFrame
+                    index = int(value)
+                    # Map the column in the Chase format to the corresponding column in the original DataFrame
+                    df[CHASE_COLUMN_CONFIG_NAME_MAP[key]] = df[index]
+
+        except (ValueError, KeyError) as e:
+            # Handle missing or incorrect configuration for the GENERAL section
+            message = (f"{e}.\nTroubleshooting help: Ensure the GENERAL section contains the proper definitions"
+                    f" in the config file. Refer to the configs provided in src/test_files/ for help.")
+            raise ConfigSectionIncompleteError(message)
+
+        # Retain only the columns in the DataFrame that match Chase column names
+        df = df.loc[:, df.columns.intersection(CHASE_COLUMN_NAMES)]
+        return df
+
+
+class RunQueryParserController(Controller):
+    """
+    Controller for query operations.
+    """
+    def __init__(self, cli_args: argparse.Namespace) -> None:
+        """
+        Initialize RunQueryParserController with user settings.
+
+        Args:
+            cli_args (argparse.Namespace): Command-line arguments.
+        """
+        super().__init__(cli_args)
+        self._user_settings = RunQueryParserUserSettings(cli_args)
+        self.queries_config = self._user_settings.queries_config
+        self.call_query_map = self._create_query_alias_map()
+        self.queries = self._get_queries()
+
+    def start_process(self) -> None:
+        """
+        Start the query process.
+
+        This method executes predefined queries based on user input.
+        """
+
+        self._execute_queries()
+
+    def _execute_queries(self) -> None:
+        """
+        Execute and display the results of predefined queries.
+        """
+        number_or_rows = self._user_settings.rows
+        for query_call, query in self.queries:
+            df = pandas.DataFrame(self._db_interface.execute_query(clean_up_config_value(query)))
+            self._display_query_results(query_call, df, number_or_rows)
+            if self._user_settings.save_results:
+                self._save_query_results(query_call, df, number_or_rows)
+
+    def _display_query_results(self, query_call: str, df: pandas.DataFrame, number_or_rows: int) -> None:
+        """
+        Display the results of a query with formatting.
+
+        Args:
+            query_call (str): Query alias.
+            df (pandas.DataFrame): DataFrame containing query results.
+            number_or_rows (int): Maximum number of rows to display.
+        """
+        data = False
+        print(f'\n"{query_call}" results:')
+        for row_idx, row in df.head(number_or_rows).iterrows():
+            data = True
+            # Display border
+            if row_idx == 0:
+                table_border = self._create_border(row)
+                print(table_border)
+
+            # Display row
+            self._display_row(row)
+
+        # Display boder
+        if data:
+            print(table_border)
+
+    def _create_border(self, row: pandas.Series) -> str:
+        """
+        Create a formatted border string for a given row of data.
+
+        Args:
+            row (pandas.Series): Row of data.
+
+        Returns:
+            str: Formatted border string.
+        """
+        max_length = 50  # Maximum length of each column value in characters
+        border_parts = ["-" * len("{: >15} ".format(str(row[col_idx])[:max_length])) for col_idx in range(len(row))]
+        border_string = "+" + "+".join(border_parts) + "+"
+        return border_string
+
+    def _display_row(self, row: pandas.Series) -> None:
+        """
+        Display a formatted row of data.
+
+        Args:
+            row (pandas.Series): Row of data from the DataFrame.
+        """
+        formatted_columns = [self._format_value(str(row[col_idx])[:50]) for col_idx in range(len(row))]
+        formatted_output = "|" + "|".join(formatted_columns) + "|"
+        print(formatted_output)
+
+    def _format_value(self, value: str) -> str:
+        """
+        Format a value to a fixed length.
+
+        Args:
+            value (str): Input value.
+
+        Returns:
+            str: Formatted value.
+        """
+        return "{: >15} ".format(value)
+
+    def _save_query_results(self, query_call: str, df: pandas.DataFrame, number_or_rows: int) -> None:
+        """
+        Save query results to a CSV file.
+
+        Args:
+            query_call (str): Query alias.
+            df (pandas.DataFrame): DataFrame containing query results.
+            number_or_rows (int): Maximum number of rows to save.
+        """
+        csv_file_name = f"{query_call}_results.csv"
+        df.head(number_or_rows).to_csv(csv_file_name)
+
+    def _get_queries(self) -> list:
+        """
+        Retrieve and validate user queries.
+
+        Returns:
+            list: List of validated queries.
+        """
+        return [(query_call, self._validate_query(query_call)) for query_call in self._user_settings.query_calls]
+
+    def _validate_query(self, query:str) -> str:
+        """
+        Validate user query.
+
+        Args:
+            query (str): User-provided query.
+
+        Raises:
+            UnknownAliasError: If the query alias is unknown.
+            IllegalStructureError: If the query structure is invalid.
+
+        Returns:
+            str: Validated query.
+        """
+        try:
+            query = self.call_query_map[query]
+            if "UPDATE" in query.upper() or "DELETE" in query.upper() or "DROP" in query.upper():
+                raise IllegalStructureError(f"The query contains illegal words: {query}")
+        except KeyError:
+            raise UnknownAliasError(f"{query}: alias does not exist")
+        return query
+
+    def _create_query_alias_map(self) -> dict:
+        """
+        Create a map of query aliases to their corresponding SQL queries.
+
+        Raises:
+            KeyError: If an alias is defined to a key that doesn't exist in QUERIES.
+
+        Returns:
+            dict: Mapping of query aliases to SQL queries.
+        """
+        query_alias_map = {}
+        for key in self.queries_config["ALIASES"]:
+            for value in clean_up_config_value(self.queries_config["ALIASES"][key]).split(","):
+                alias = clean_up_config_value(value)
+                if alias not in query_alias_map.keys():
+                    try:
+                        query_alias_map[alias] = self.queries_config.get("QUERIES", key, raw=True)
+                    except KeyError:
+                        raise KeyError(f"Alias defined to a key that doesn't exist in QUERIES in: {self._user_settings.queries_config_path}")
+                else:
+                    raise DuplicateAliasError(f"{alias}: Alias is used multiple times in [ALIASES]: {self._user_settings.queries_config_path}")
+        return query_alias_map
+
+class TrendsParserController(Controller):
+    """
+    Controller for query operations.
+    """
+    def __init__(self, cli_args: argparse.Namespace) -> None:
+        """
+        Initialize TrendsParserController with user settings.
+
+        Args:
+            cli_args (argparse.Namespace): Command-line arguments.
+        """
+        super().__init__(cli_args)
+        self._user_settings = TrendsParserUserSettings(cli_args)
+        self._trends_config = self._user_settings.trends_config
+        
+    def extract_purchase_date(self, description, posting_date):
+        # Search for a date formatted as MM/DD in the description, starting from the right
+        match = re.search(r'(\d{2}/\d{2})(?!.*\d{2}/\d{2})', description[::-1])
+        if match:
+            date_str = match.group(1)[::-1]  # Re-reverse to get the correct date string
+            month, day = map(int, date_str.split('/'))
+            # Use the year from the posting date
+            year = posting_date.year
+            return datetime(year, month, day)
+        else:
+            # If no date is found in the description, use the posting date
+            return posting_date
+
+    def add_purchase_date(self, df):
+
+        # Convert the 'POSTING DATE' to datetime
+        df['POSTING DATE'] = pandas.to_datetime(df['POSTING DATE'])
+
+        # Apply the function to create the 'PURCHASE DATE' column
+        df['PURCHASE DATE'] = df.apply(lambda row: self.extract_purchase_date(row['DESCRIPTION'], row['POSTING DATE']), axis=1)
+
+        return df
+
+
+    def start_process(self):
+        query = clean_up_config_value(self._trends_config.get('QUERIES', 'expenses', raw=True))
+        raw_column_names = [raw_value for raw_value in self._trends_config["COLUMN ORDER"]["expenses"].split(",")]
+        columns = [clean_up_config_value(value) for value in raw_column_names]
+        df = pandas.DataFrame(self._db_interface.execute_query(query), columns=columns)
+        df = self.add_purchase_date(df)
+
+        # Convert the 'POSTING DATE' to datetime
+        df['PURCHASE DATE'] = pandas.to_datetime(df['PURCHASE DATE'])
+
+        # Extract the day of the week from the 'PURCHASE DATE'
+        df['DAY OF WEEK'] = df['PURCHASE DATE'].dt.day_name()
+
+        # Define the order of days of the week starting from Sunday
+        days_order = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"]
+
+        # Group by 'DAY OF WEEK' and 'DESCRIPTION' to get the count of transactions
+        expense_summary = df.groupby(['DAY OF WEEK', 'DESCRIPTION']).size().reset_index(name='COUNT')
+
+        # Pivot the table to make 'DAY OF WEEK' the columns
+        expense_pivot = expense_summary.pivot(index='DESCRIPTION', columns='DAY OF WEEK', values='COUNT').fillna(0)
+
+        # Reorder the columns according to the defined days_order
+        expense_pivot = expense_pivot[days_order]
+
+        # Display the resulting table
+        expense_pivot.to_csv('trends.csv')

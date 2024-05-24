@@ -5,7 +5,8 @@ from importlib.metadata import version as get_version
 from src.controller import (
     ImportParserController, 
     MakeImportReadyParserController, 
-    RunQueryParserController
+    RunQueryParserController,
+    TrendsParserController
 )
 from src.interface_text import get_help_menu
 from src.interface_funcs import (
@@ -13,7 +14,7 @@ from src.interface_funcs import (
     ConfigSectionIncompleteError,
     DuplicateAliasError,
     QueryNotDefinedError,
-    BadQueryStructureError,
+    IllegalStructureError,
     UnknownAliasError,
 )
 
@@ -119,6 +120,26 @@ def get_cli_args() -> argparse.Namespace:
         action='store_true',
     )
 
+    # Create Trends Subparser 
+    trends_parser = subparsers.add_parser(
+        'trends',
+        help="Displays trends"
+    )
+    trends_parser.set_defaults(func=start_trends_process)
+    trends_parser.add_argument(
+        'sqlite_db',
+        metavar='<SQLITE DB>',
+        type=db_connection,
+    )
+    trends_parser.add_argument(
+        'trends_config',
+        metavar='<CONFIG>',
+    )
+    # trends_parser.add_argument(
+    #     'query',
+    #     metavar='<QUERY>'
+    # )
+
     return cli.parse_args()
 
 def start_import_process(cli_args: argparse.Namespace) -> None:
@@ -151,6 +172,16 @@ def start_run_query_process(cli_args: argparse.Namespace) -> None:
     controller = RunQueryParserController(cli_args)
     controller.start_process()
 
+def start_trends_process(cli_args: argparse.Namespace) -> None:
+    """
+    Start the trends process based on CLI arguments.
+
+    Args:
+        cli_args (argparse.Namespace): Parsed command-line arguments.
+    """
+    controller = TrendsParserController(cli_args)
+    controller.start_process()
+
 def main() -> None:
     """
     Main function to execute the command-line interface.
@@ -176,7 +207,7 @@ def main() -> None:
     # Handle custom errors
     except (FileNotFoundError, ConfigSectionIncompleteError,
             DuplicateAliasError, QueryNotDefinedError,
-            BadQueryStructureError, UnknownAliasError) as e:
+            IllegalStructureError, UnknownAliasError) as e:
         print(f"Error: {e}")
 
     finally:

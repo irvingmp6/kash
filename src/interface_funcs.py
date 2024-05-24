@@ -169,7 +169,7 @@ class QueryNotDefinedError(Exception):
     pass
 
 
-class BadQueryStructureError(Exception):
+class IllegalStructureError(Exception):
     """Exception raised for queries with bad structure."""
     pass
 

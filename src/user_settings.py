@@ -79,3 +79,17 @@ class RunQueryParserUserSettings(UserSettings):
         self.query_calls = cli_args.query_calls  # Lis of query calls to execute
         self.save_results = cli_args.save_results
         self.rows = cli_args.rows
+
+class TrendsParserUserSettings(UserSettings):
+    """Class for managing user settings related to query operations."""
+
+    def __init__(self, cli_args: argparse.Namespace) -> None:
+        """
+        Initialize TrendsUserSettings with command-line arguments.
+
+        Args:
+            cli_args (argparse.Namespace): Command-line arguments parsed by argparse.
+        """
+        super().__init__(cli_args)
+        self.trends_config_path = cli_args.trends_config  # Path to the trends configuration file
+        self.trends_config = self.get_config_object(self.trends_config_path)
