@@ -80,12 +80,12 @@ def get_cli_args() -> argparse.Namespace:
     )
     make_import_ready_parser.set_defaults(func=start_make_import_ready_process)
     make_import_ready_parser.add_argument(
-        'raw_csv_file',
-        metavar='<RAW CSV FILEPATH>',
-    )
-    make_import_ready_parser.add_argument(
         'conversion_config',
         metavar='<CONVERSION CONFIG FILEPATH>',
+    )
+    make_import_ready_parser.add_argument(
+        'raw_csv_file',
+        metavar='<RAW CSV FILEPATH>',
     )
 
     # Create Run Query Subparser
